@@ -7,7 +7,7 @@ export {
   LowPriority as LowSchedulerPriority,
   IdlePriority as IdleSchedulerPriority,
 } from "./src/SchedulerPriorities";
-export {getCurrentPriorityLevel as getCurrentSchedulerPriorityLevel} from "./src/Scheduler";
+export {getCurrentPriorityLevel as getCurrentSchedulerPriorityLevel} from "./src/Scheduler_He";
 
-export * as Scheduler from "./src/Scheduler";
-export {scheduleCallback} from "./src/Scheduler";
+export * as Scheduler from "./src/Scheduler_He";
+export {scheduleCallback} from "./src/Scheduler_He";
