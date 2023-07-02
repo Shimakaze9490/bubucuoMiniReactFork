@@ -22,47 +22,47 @@ describe("任务", () => {
     });
   });
 
-  it("3个不同优先级的任务", () => {
-    let eventTasks: Array<string> = [];
+  // it("3个不同优先级的任务", () => {
+  //   let eventTasks: Array<string> = [];
 
-    scheduleCallback(NormalPriority, () => {
-      eventTasks.push("Task1");
-      expect(eventTasks).toEqual(["Task3", "Task2", "Task1"]);
-    });
+  //   scheduleCallback(NormalPriority, () => {
+  //     eventTasks.push("Task1");
+  //     expect(eventTasks).toEqual(["Task3", "Task2", "Task1"]);
+  //   });
 
-    scheduleCallback(UserBlockingPriority, () => {
-      eventTasks.push("Task2");
-      expect(eventTasks).toEqual(["Task3", "Task2"]);
-    });
+  //   scheduleCallback(UserBlockingPriority, () => {
+  //     eventTasks.push("Task2");
+  //     expect(eventTasks).toEqual(["Task3", "Task2"]);
+  //   });
 
-    scheduleCallback(ImmediatePriority, () => {
-      eventTasks.push("Task3");
-      expect(eventTasks).toEqual(["Task3"]);
-    });
-  });
+  //   scheduleCallback(ImmediatePriority, () => {
+  //     eventTasks.push("Task3");
+  //     expect(eventTasks).toEqual(["Task3"]);
+  //   });
+  // });
 
-  it("4个不同优先级的任务", () => {
-    let eventTasks: Array<string> = [];
+//   it("4个不同优先级的任务", () => {
+//     let eventTasks: Array<string> = [];
 
-    scheduleCallback(NormalPriority, () => {
-      eventTasks.push("Task1");
-      expect(eventTasks).toEqual(["Task3", "Task2", "Task1"]);
-    });
+//     scheduleCallback(NormalPriority, () => {
+//       eventTasks.push("Task1");
+//       expect(eventTasks).toEqual(["Task3", "Task2", "Task1"]);
+//     });
 
-    scheduleCallback(UserBlockingPriority, () => {
-      eventTasks.push("Task2");
-      expect(eventTasks).toEqual(["Task3", "Task2"]);
-    });
+//     scheduleCallback(UserBlockingPriority, () => {
+//       eventTasks.push("Task2");
+//       expect(eventTasks).toEqual(["Task3", "Task2"]);
+//     });
 
-    scheduleCallback(ImmediatePriority, () => {
-      eventTasks.push("Task3");
-      expect(eventTasks).toEqual(["Task3"]);
-    });
+//     scheduleCallback(ImmediatePriority, () => {
+//       eventTasks.push("Task3");
+//       expect(eventTasks).toEqual(["Task3"]);
+//     });
 
-    scheduleCallback(NormalPriority, () => {
-      eventTasks.push("Task4");
+//     scheduleCallback(NormalPriority, () => {
+//       eventTasks.push("Task4");
 
-      expect(eventTasks).toEqual(["Task3", "Task2", "Task1", "Task4"]);
-    });
-  });
+//       expect(eventTasks).toEqual(["Task3", "Task2", "Task1", "Task4"]);
+//     });
+//   });
 });

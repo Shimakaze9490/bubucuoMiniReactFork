@@ -48,10 +48,20 @@ let taskTimeoutID: any = -1; // 用于维护倒计时, 以及取消倒计时的
 
 let schedulePerformWorkUntilDeadline: Function;
 
-let startTime = -1;
+let startTime = -1; // 每一个时间切片的开始时刻, 在 宏任务入口赋值, performWorkUnitDeadline
 let nddesPaint = false;
 
 let frameInterval = 5; // frameYieldMs;
+
+export function cancelCallback (task: Task) {
+  // 由于堆里面不能直接删除, 把回调置为空就能防止被执行
+  task.callback = null;
+}
+
+// 随时获取当前任务优先级
+export function getCurrentPriorityLevel(): PriorityLevel {
+  return currentPriorityLevel;
+}
 
 // 保证只倒计时一个任务, 加上一个控制锁, 保证唯一性
 // isHostTimeoutScheduled: boolean = false;
@@ -71,6 +81,8 @@ function cancelHostTimeout() {
   taskTimeoutID = -1; // 重置
 }
 
+// 走秒, 向前
+// timerQueue --> timer --> taskQueue;
 // 检查timerQueue中的任务, 是否有任务到期了呢, 到期了就移动到taskQueue中, 但是不能立即执行!
 // advanceTimers什么时候调用, 是handleTimeout倒计时结束, 考虑让下一个任务开始倒计时
 // handleTimeout --> advanceTimers
@@ -133,6 +145,50 @@ function handleTimeout(currentTime: number) {
   }
 }
 
+// 宏任务 为什么不用setTimeout ?? 最小4ms延迟
+const channel = new MessageChannel();
+
+schedulePerformWorkUntilDeadline = () => {
+  // 一端发送消息
+  channel.port1.postMessage(null)
+}
+
+// 一端接收消息
+channel.port2.onmessage = performWorkUnitDeadline
+
+// 宏任务内执行函数链: performWorkUnitDeadline --> 
+function performWorkUnitDeadline () {
+
+  // 要去执行内容函数flushWork, 实际存在全局变量 scheduledHostCallback
+  if (scheduledHostCallback !== null) {
+    const currentTime = getCurrentTime();
+
+    // Keep track of the start time so we can measure how long the main thread has been blocked.
+    // 记录本次宏任务(时间切片) 的开始时间
+    startTime = currentTime;
+
+    const hasTimeRemaining = true; // 固定为true
+    let hasMoreWork = true;
+
+    try {
+      /* 本轮事件循环, 没有执行完全部的任务, 但是时间切片已经用完 */
+      hasMoreWork = scheduledHostCallback(hasTimeRemaining, currentTime); // 就是执行flushWork
+    } finally {
+      if (hasMoreWork) {
+
+      } else {
+        // 没有更多需要执行的任务: 这轮事件循环宏任务, 结束
+        isMessageLoopRunning = false;
+        // 这轮的调用函数flushWork清空
+        scheduledHostCallback = null;
+      }
+    }
+  } else {
+    // 没有执行内容flushWork, 直接开锁结束
+    isMessageLoopRunning = false;
+  }
+}
+
 // HACK 最后实现, 有两个地方使用到, 并且参数传入的flushWork如何使用?
 // 这个函数requestHostCallback, 实际上是react对浏览器原生api
 // requestIdelCallback: MessageChannel 的模拟
@@ -140,31 +196,38 @@ function handleTimeout(currentTime: number) {
 // callback里面会接受到一个对象参数: IdleDeadline
 // 里面包含, timeRemaining(), didTimeout 来判断当前回调函数是否存在过期
 // 在比较简单的情况下可以直接使用, 兼容性问题
+
+// HACK 理解 事件循环 / 宏任务
+// 为什么react要自己实现 ?? 更高的控制权 / 兼容性
 function requestHostCallback(_flushWork: Callback) {
+
+  // 保持api参数的一致性
   // 调用flushWork, 需要传入 hasTimeRemaining, initialTime 出处是??
 
   // 开始调度 scheduledHostCallback全局变量 赋值为flushWork
   // 为什么需要这个全局变量, 因为具体的实现不只是在这一个函数里面
+  // 全局变量的好处 --> 分开多处处理, 因为涉及到宏任务, 不能直接调用
   scheduledHostCallback = _flushWork;
 
   // isMessageLoopRunning "事件循环"的锁
   if (!isMessageLoopRunning) {
     isMessageLoopRunning = true;
 
-    // TODO 0701 写到这里了
     // HACK 调度任务 直到 时间结束(时间切片内)
     // 里面使用到一个api, MessageChannel创建宏任务
-    schedulePerformWorkUntilDeadline()
-
-      // 1. 如何定义时间切片
-      // 2. 
+    // 重点理解: 为什么需要创建宏任务, 为什么一个宏任务 消费一个时间切片
+    // postMessage()
+    schedulePerformWorkUntilDeadline();
   }
 
 }
-function flushWork(hasTimeRemaining: boolean, initialTime: number) {
+/* 调用链 scheduleCallback -> requestHostCallback -> '宏任务: MessageChannel' ->  flushWork -> workLoop ->  */
+/* 消耗1单位的时间切片 */
+function flushWork(hasTimeRemaining: boolean, initialTime: number): boolean /* hasMoreWork */ {
   isHostCallbackScheduled = false; // 开锁
 
-  // 额外检查, 如果有在倒计时没必要, 一同取消掉
+  // 额外检查, 如果有在倒计时没必要, 先取消掉
+  // 因为防止干扰主线程
   if (isHostTimeoutScheduled) {
     isHostTimeoutScheduled = false;
     cancelHostTimeout();
@@ -174,22 +237,37 @@ function flushWork(hasTimeRemaining: boolean, initialTime: number) {
   isPerformingWork = true;
 
   // 为什么要先取得上一次任务的优先级 ?? 什么用
+  // 因为在workLoop执行多个具体任务时随时会更新
+  // 而在执行完我们需要还原为开始值
   let previousPriorityLevel = currentPriorityLevel;
 
-  // 再赋值覆盖
-
   try {
-    return workLoop(hasTimeRemaining, initialTime); // <--- 在这里正式调用 workLoop 时间切片 + callback()
+    return workLoop(hasTimeRemaining, initialTime); // 一个单位的时间切片内多个任务执行
   } finally {
-    isPerformingWork = false; // 开锁
     currentTask = null; // 当前任务置空
-    currentPriorityLevel = previousPriorityLevel; // 为什么要这样还原优先级 ?? 有什么作用
+    isPerformingWork = false; // 执行锁, 开锁
+    currentPriorityLevel = previousPriorityLevel; // 还原优先级为 执行workLoop之前
   }
 }
 
-// HACK 正式进入任务的调度, 传入的两个参数:
-// 在当前时间切片内, 循环执行任务
-function workLoop(hasTimeRemaining: boolean, initialTime: number) {
+// 判断当前时间切片是否消耗完, 是否该交还控制权给浏览器, 进入下一个宏任务周期
+function shouldYieldToHost(): boolean {
+  // 用当前时间 减去 时间切片开始时间
+  const timeElapsed = getCurrentTime() - startTime; // startTime 在哪里赋值的 ?
+
+  // frameInterval = 5ms; 为什么不是16.7ms, 不考虑帧对齐(window.requestAnimationFrame)
+  // 默认会小于16.7 防止浏览器需要执行其他的内容
+  if (timeElapsed < frameInterval) {
+    // The main thread has only been blocked for a really short amount of time;
+    // smaller than a single frame. Don't yield yet.
+    return false;
+  }
+  return true;
+}
+
+// hasTimeRemaining = true
+// initialTime = startTime = 时间切片开始时刻
+function workLoop(hasTimeRemaining: boolean, initialTime: number): boolean /* hasMoreWork */ {
   // currentTask 当前任务: 为什么设置成全局变量? 方便取消打断 currentTask = null;
   // 所有需要执行的任务都放到了taskQueue里面了, 所以接下来就是遍历其
 
@@ -201,27 +279,27 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number) {
   currentTask = peek(taskQueue) as Task;
 
   while (currentTask !== null) {
-    // 检查过期与否: 没有过期
-    // 并且没有剩余时间了, 当前时间切片
-    // 没法继续执行了, break掉
-    if (currentTask.expirationTime > currentTime && !(hasTimeRemaining)) {
+    const should = shouldYieldToHost();
+    // 1. 检查该任务到执行时间吗
+    // 2. 检查是否该交还控制权: 也就是时间切片耗尽
+    // 3. hasTimeRemaining, 固定为true, 因为是内部自行判断剩余时间的
+    // should 与 hasTimeRemaining 满足一个就行, 因为是相同含义
+    if (currentTask.expirationTime > currentTime && (should || !hasTimeRemaining)) {
       break;
     }
 
     const callback = currentTask.callback;
-    currentPriorityLevel = currentTask.priorityLevel; // 同时更新优先级, 在scheduleCallback里面添加的优先级
+    currentPriorityLevel = currentTask.priorityLevel; // 更新全局的优先级
 
     if (isFn(callback)) {
       // 执行之前, 为什么要置成null
       // 因为是全局变量, 防止其他地方重复执行
       currentTask.callback = null;
 
-      /* 正式执行 !! 需要传递什么参数 ? */
-
       // 过期了吗
       const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
 
-      // 一个任务可能没有执行完, 返回下半段后续执行
+      // 一个任务可能没有执行完, 返回下半段后续执行: () => () => {}
       const continuationCallback = callback(didUserCallbackTimeout);
       if (isFn(continuationCallback)) {
         // 说明任务没有执行完, currentTask继续任务池里呆着; 同时callback更新为下半段
@@ -252,15 +330,15 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number) {
 
   // HACK break掉上方的while循环, 有两种情况: 任务执行完了 / 时间切片完了
   if (currentTask !== null) {
-    return true; // 表明还有剩余任务待执行
+    return true; /* hasMoreWork */
   } else {
-    // taskQueue没有剩余任务了, 写过很多遍了: 从timerQueue中取
+    // taskQueue没有剩余任务了, 空闲了, 写过很多遍了: 从timerQueue中取
     const firstTimer: Task = peek(timerQueue) as Task;
     if (firstTimer !== null) {
       // 开始倒计时一个任务
       requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
     }
-    return false; // 表明这轮没有剩余任务了
+    return false;
   }
 }
 
@@ -350,8 +428,9 @@ export function scheduleCallback(
     // 无延迟的任务
     push(taskQueue, newTask);
 
-    // 没有延迟, 校验一下
-    // 没有调度中的任务
+    // 没有延迟, 校验一下, 现在没有调度中的任务, 那就去调度嘛
+    // 这里的判断: 没有调度中 / 没有执行中
+    // isPerformingWork --> 任务执行中 (因为具体的任务执行可能会比较慢, 也是为了保证锁)
     if (!isHostCallbackScheduled && !isPerformingWork) {
       isHostCallbackScheduled = true; // 上锁
       // 一共两处地方执行这个方法
