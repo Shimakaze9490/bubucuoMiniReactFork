@@ -73,11 +73,14 @@ function placeChild(
 
 // 初次渲染
 // 更新
+// 正常的数组children: 数组 -> fiber单链表
 export function reconcileChildren(
   current: Fiber | null,
   returnFiber: Fiber,
   nextChildren: any // 数组、对象、文本
 ): Fiber | null {
+
+  // 参数处理
   const newChildren = Array.isArray(nextChildren)
     ? nextChildren
     : [nextChildren];
@@ -115,6 +118,7 @@ export function reconcileChildren(
       break;
     }
 
+    // child转成fiber
     let newFiber: Fiber;
     if (isStr(newChild)) {
       newFiber = createFiberFromText(newChild, returnFiber);
@@ -172,6 +176,7 @@ export function reconcileChildren(
         shouldTrackSideEffects
       );
 
+      // 找到第一个child, 作为链表头; 其余的通过sibling连接起来
       if (previousNewFiber === null) {
         resultingFirstChild = newFiber;
       } else {

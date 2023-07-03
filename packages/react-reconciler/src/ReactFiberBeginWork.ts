@@ -21,6 +21,10 @@ import {
 // 1. 处理当前fiber，因为不同组件对应的fiber处理方式不同，
 // 2. 返回子节点
 export function beginWork(current: Fiber | null, workInProgress: Fiber) {
+  // 函数组件 / 原生组件 / 类组件 / Fragment ...
+  // HACK 标记 -> 执行不同的内容 "分发 Dispatch"
+
+  // <div><span><img></div>
   switch (workInProgress.tag) {
     case HostRoot:
       return updateHostRoot(current, workInProgress);
@@ -52,7 +56,9 @@ function updateHostRoot(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
 
+// 更新原生组件 <div id style><span><img></div>
 function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
+
   const {type} = workInProgress;
   if (!workInProgress.stateNode) {
     workInProgress.stateNode = document.createElement(type);
@@ -61,8 +67,11 @@ function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
     updateNode(workInProgress.stateNode, {}, workInProgress.pendingProps);
   }
 
+  // fiber对象 { pendingProps: 就是element的第二个参数, 尚未更新到dom的属性 }
+  // children 来源于React.createElement 嵌套 -> 数组
   let nextChildren = workInProgress.pendingProps.children;
 
+  // 特殊情况: 文本 innerText ...
   const isDirectTextChild = shouldSetTextContent(
     type,
     workInProgress.pendingProps
@@ -73,6 +82,7 @@ function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
     return null;
   }
 
+  // 正常的数组children: 数组 -> fiber单链表
   workInProgress.child = reconcileChildren(
     current,
     workInProgress,
@@ -157,6 +167,8 @@ function updateContextConsumer(current: Fiber | null, workInProgress: Fiber) {
   const render = workInProgress.pendingProps.children;
 
   const newChildren = render(newValue);
+
+  // 处理children数组为连边
   workInProgress.child = reconcileChildren(
     current,
     workInProgress,

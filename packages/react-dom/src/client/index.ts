@@ -6,7 +6,7 @@ function ReactDOMRoot(internalRoot: FiberRoot) {
   this._internalRoot = internalRoot;
 }
 
-ReactDOMRoot.prototype.render = function (children) {
+ReactDOMRoot.prototype.render = function (children /* jsx -> React.createElement */) {
   console.log(
     "%c [  ]-11",
     "font-size:13px; background:pink; color:#bf2c9f;",

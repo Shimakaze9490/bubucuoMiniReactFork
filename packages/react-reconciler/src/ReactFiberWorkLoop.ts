@@ -1,5 +1,5 @@
 import {ReactContext, ReactElement} from "shared/ReactTypes";
-import {NormalPriority, Scheduler} from "scheduler";
+import {NormalPriority, Scheduler } from "scheduler";
 import {createFiberFromElement} from "./ReactFiber";
 import {FiberRoot, Fiber} from "./ReactInternalTypes";
 import {beginWork, updateNode} from "./ReactFiberBeginWork";
@@ -24,50 +24,67 @@ import {popProvider} from "./ReactNewContext";
 let workInProgress: Fiber | null = null;
 let workInProgressRoot: FiberRoot | null = null;
 
+// HACK 被调用render()
+// element -> React.createElement
+// FiberRoot
 export function updateContainer(element: ReactElement, root: FiberRoot) {
+  // createFiberFromElement 把 createElement生成的嵌套对象, 取的第一层 --> 生成一个fiber
+
+  // current 是父fiber; child是子fiber
   root.current.child = createFiberFromElement(element, root.current);
+
+  // 默认操作 Placement -> 新增
   root.current.child.flags = Placement;
+
   scheduleUpdateOnFiber(root, root.current);
 }
 
-// !
+// ! 基于当前的fiber执行更新: 分为几个任务, 本身 / child / sibling ...
 export function scheduleUpdateOnFiber(root: FiberRoot, fiber: Fiber) {
   workInProgressRoot = root;
   workInProgress = fiber;
 
+  // HACK 就是之前写的scheduleCallback --> callback 封装成任务, 使其被调度
   Scheduler.scheduleCallback(NormalPriority, workLoop);
 }
 
+// callback '任务本身'
 function workLoop() {
+  // 第一步: 处理所有fiber的内容
   while (workInProgress !== null) {
     performUnitOfWork(workInProgress);
   }
 
+  // 第二步: fiber映射成正式节点 "commit", 开端root
   if (!workInProgress && workInProgressRoot) {
     commitRoot();
   }
 }
-
+/* HACK 核心函数 */
 // 1. 处理当前的fiber，就是workInProgress
 // 2. 重新复制workInProgress
-function performUnitOfWork(unitOfWork: Fiber) {
-  //
+function performUnitOfWork(unitOfWork: Fiber /* workInProgress 下一个fiber */) {
 
+  // 每个fiber上都有一个alternate, 保存上一次更新
   const current = unitOfWork.alternate;
 
-  let next = beginWork(current, unitOfWork); // 1. 处理fiber 2. 返回子节点
+  // !! 真正开始执行
+  let next = beginWork(current/* 老 */, unitOfWork/* 新 */); // 1. 处理fiber 2. 返回子节点
 
+  /* 关系如何找 --> 树深度优先 */
   // next是子节点
   if (next === null) {
     // 没有子节点
     // 找兄弟、叔叔节点、爷爷的兄弟的节点等等
     completeUnitOfWork(unitOfWork);
   } else {
-    // 有子节点
+    // 有next, 有子节点
+    // NOTE 返回 到 workLoop -> while
     workInProgress = next;
   }
 }
 
+// "树的深度优先"
 // 没有子节点->找兄弟->找叔叔->找爷爷节点
 function completeUnitOfWork(unitOfWork: Fiber) {
   let completedWork: Fiber = unitOfWork;
@@ -106,10 +123,14 @@ function commitRoot() {
 }
 
 function commitMutationEffects(finishedWork: Fiber, root: FiberRoot) {
+  // 注意: 这个方法是个递归child
   recursivelyTraverseMutationEffects(root, finishedWork);
+
+  // 真正提交的地方
   commitReconciliationEffects(finishedWork);
 }
 
+// ?? 作用是: 
 function recursivelyTraverseMutationEffects(
   root: FiberRoot,
   parentFiber: Fiber
@@ -118,17 +139,20 @@ function recursivelyTraverseMutationEffects(
 
   while (child !== null) {
     commitMutationEffects(child, root);
+    // TODO
     child = child.sibling;
   }
 }
 
 // fiber.flags
-// 新增插入、移动位置、更新属性、节点删除
+// 提交包括操作: 新增插入、移动位置、更新属性、节点删除
 function commitReconciliationEffects(finishedWork: Fiber) {
   const flags = finishedWork.flags;
 
+  // 位运算比较
   if (flags & Placement) {
     commitPlacement(finishedWork);
+    // 位运算, 去除
     finishedWork.flags &= ~Placement;
   }
 
