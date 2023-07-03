@@ -18,22 +18,24 @@ import {
   ContextConsumer,
 } from "./ReactWorkTags";
 
+// HACK 根据标记 ---> 执行不同的内容 "分发模式 Dispatch"
+// 函数组件 / 原生组件 / 类组件 / Fragment ...
 // 1. 处理当前fiber，因为不同组件对应的fiber处理方式不同，
 // 2. 返回子节点
 export function beginWork(current: Fiber | null, workInProgress: Fiber) {
-  // 函数组件 / 原生组件 / 类组件 / Fragment ...
-  // HACK 标记 -> 执行不同的内容 "分发 Dispatch"
-
-  // <div><span><img></div>
   switch (workInProgress.tag) {
+    // 原生根标签
     case HostRoot:
       return updateHostRoot(current, workInProgress);
 
+    // 原生标签
     case HostComponent:
       return updateHostComponent(current, workInProgress);
 
+    // 函数组件
     case FunctionComponent:
       return updateFunctionComponent(current, workInProgress);
+    // 类组件
     case ClassComponent:
       return updateClassComponent(current, workInProgress);
 
@@ -52,18 +54,20 @@ export function beginWork(current: Fiber | null, workInProgress: Fiber) {
   }
 }
 
+// 跟fiber
 function updateHostRoot(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
 
 // 更新原生组件 <div id style><span><img></div>
 function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
+  const { type } = workInProgress;
+  // div, span ,img
 
-  const {type} = workInProgress;
   if (!workInProgress.stateNode) {
+    // 创建真实DOM
     workInProgress.stateNode = document.createElement(type);
-    // 更新属性
-    // todo
+    // 处理属性props, 包括children
     updateNode(workInProgress.stateNode, {}, workInProgress.pendingProps);
   }
 
@@ -82,7 +86,7 @@ function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
     return null;
   }
 
-  // 正常的数组children: 数组 -> fiber单链表
+  // HACK *** 处理children: Element数组 -> fiber单链表
   workInProgress.child = reconcileChildren(
     current,
     workInProgress,

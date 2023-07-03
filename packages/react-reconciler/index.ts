@@ -18,4 +18,10 @@ export * from "./src/ReactFiberHooks";
 
 // 关系: sibling / child / return
 
-// 2 <<< 3
+// 2 <<< 31
+
+// React.createRoot() 返回root实例对象, 上面有个render方法, 渲染jsx(本质上是编译过后的createElement嵌套)
+
+// eg. ReactDOM.createRoot(document.getElementById('root')as HTMLElement).render(jsx);
+
+// 

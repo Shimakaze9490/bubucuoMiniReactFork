@@ -2,6 +2,8 @@ import type {WorkTag} from "./ReactWorkTags";
 import type {Flags} from "./ReactFiberFlags";
 import {ReactContext} from "shared/ReactTypes";
 
+/* 定义fiber的类型声明, 字段/数据/容器 */
+
 export type Fiber = {
   // 标记组件类型
   tag: WorkTag;
@@ -60,6 +62,7 @@ export type Fiber = {
   dependencies: Dependencies | null; // 单链表结构存储
 };
 
+// 容器类型
 export type Container =
   | (Element & {_reactRootContainer?: FiberRoot})
   | (Document & {_reactRootContainer?: FiberRoot})

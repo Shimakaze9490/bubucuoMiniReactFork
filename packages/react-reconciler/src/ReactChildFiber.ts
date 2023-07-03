@@ -71,16 +71,15 @@ function placeChild(
   }
 }
 
-// 初次渲染
-// 更新
-// 正常的数组children: 数组 -> fiber单链表
+// 初次渲染, 更新
+// 正常的数组children: Element数组 ---> fiber单链表
 export function reconcileChildren(
   current: Fiber | null,
   returnFiber: Fiber,
   nextChildren: any // 数组、对象、文本
 ): Fiber | null {
 
-  // 参数处理
+  // 统一成数组
   const newChildren = Array.isArray(nextChildren)
     ? nextChildren
     : [nextChildren];

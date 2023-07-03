@@ -19,12 +19,16 @@ import {
 import {REACT_FRAGMENT_TYPE, REACT_PROVIDER_TYPE} from "shared/ReactSymbols";
 import {REACT_CONTEXT_TYPE} from "../../shared/ReactSymbols";
 
+// NOTE 梳理下调用链: createFiberFromElement / createFiberFromTypeAndProps / createFiberFromText --> createFiber --> new FiberNode();
+// 二级方法 -> 一级方法 -> 核心方法
+
+// 基础方法createFiber: "工厂方法" 返回FoberNode构造函数的实例
 // 创建一个fiber
 export function createFiber(
   tag: WorkTag,
   pendingProps: any,
   key: null | string,
-  returnFiber: Fiber | null
+  returnFiber: Fiber | null, // returnFiber 代表父级fiber
 ): Fiber {
   return new FiberNode(tag, pendingProps, key, returnFiber);
 }
@@ -56,7 +60,7 @@ function FiberNode(
   // 记录了节点在兄弟节点中的位置下标，用于diff时候判断节点是否需要发生移动
   this.index = 0;
 
-  this.pendingProps = pendingProps;
+  this.pendingProps = pendingProps; // <----- Element.props
   this.memoizedProps = null;
   this.updateQueue = null;
   // 不同的组件的 memoizedState 指代也不同
@@ -77,12 +81,25 @@ function FiberNode(
   this.dependencies = null;
 }
 
-// 根据 ReactElement 创建Fiber
+// 根据 Element 创建Fiber
+// Element 不可直接用
 export function createFiberFromElement(
   element: ReactElement,
   returnFiber: Fiber
 ) {
+
+  // export type ReactElement = {
+  //   $$typeof: any;
+  //   type: any; <--- 'div'
+  //   key: any;
+  //   ref: any;
+  //   props: any; <--- props包含所有属性，其中最重要的是children: Element[] | Element | string | null
+  //   _owner: any; // ReactFiber
+  // };
+
   const {type, key} = element;
+
+  /* HACK 特别注意pendingProps属性是哪里来的 ? Element的props */
   const pendingProps = element.props;
   const fiber = createFiberFromTypeAndProps(
     type,
@@ -100,7 +117,13 @@ export function createFiberFromTypeAndProps(
   pendingProps: any,
   returnFiber: Fiber
 ) {
-  let fiberTag: WorkTag = IndeterminateComponent;
+  // fiberTag 就是 this.tag = tag;
+  // 函数组件 tag = FunctionComponent;
+  // 类组件 tag = ClassComponent;
+  let fiberTag: WorkTag = IndeterminateComponent; // 初始化为未知的组件类型
+
+  /* 然后通过一系列判断, 确定组件具体类型: 函数组件 / 类组件 / 文本 / 原生标签 / Fragment / .... */
+  // 原型上 isReactComponent = {}
   if (isFn(type)) {
     // 判断函数组件还是类组件
     if (shouldConstruct(type)) {
@@ -125,8 +148,8 @@ export function createFiberFromTypeAndProps(
   return fiber;
 }
 
-// 判断是否是类组件
-function shouldConstruct(Component: Function) {
+// 判断是否是类组件: boolean
+function shouldConstruct(Component: Function): boolean {
   const prototype = Component.prototype;
 
   return !!(prototype && prototype.isReactComponent);

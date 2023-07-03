@@ -19,37 +19,40 @@ import {
 } from "./ReactHookEffectTags";
 import {popProvider} from "./ReactNewContext";
 
+// HACK Current当前fiber； wip正在构建的fiber
 // work in progress 正在工作当中的
-// current
 let workInProgress: Fiber | null = null;
 let workInProgressRoot: FiberRoot | null = null;
 
 // HACK 被调用render()
-// element -> React.createElement
-// FiberRoot
+// Element嵌套 --> Fiber链
 export function updateContainer(element: ReactElement, root: FiberRoot) {
-  // createFiberFromElement 把 createElement生成的嵌套对象, 取的第一层 --> 生成一个fiber
-
-  // current 是父fiber; child是子fiber
+  // 需要将element转成fiber，其父级fiber就是root.current
+  // 联系起来，fiber.child = childFiber;
   root.current.child = createFiberFromElement(element, root.current);
-
-  // 默认操作 Placement -> 新增
+  // 新fiber默认操作 Placement === 新增
   root.current.child.flags = Placement;
 
+  /* NOTE 开始基于fiber链的更新调度了 */
   scheduleUpdateOnFiber(root, root.current);
 }
 
 // ! 基于当前的fiber执行更新: 分为几个任务, 本身 / child / sibling ...
 export function scheduleUpdateOnFiber(root: FiberRoot, fiber: Fiber) {
+
+  // fiber需要遍历处理，通过全局变量维护方便点: wip, wipRoot
   workInProgressRoot = root;
   workInProgress = fiber;
 
-  // HACK 就是之前写的scheduleCallback --> callback 封装成任务, 使其被调度
+  // HACK 就是之前写的scheduleCallback --> callback 封装成任务, 使其被调度 --> workLoop
   Scheduler.scheduleCallback(NormalPriority, workLoop);
 }
 
-// callback '任务本身'
+// callback === '任务本身', 处理一个个的fiber单位
 function workLoop() {
+
+  // HACK 两大核心任务: fiber的比较更新 / fiber映射成真实DOM
+
   // 第一步: 处理所有fiber的内容
   while (workInProgress !== null) {
     performUnitOfWork(workInProgress);
@@ -60,48 +63,49 @@ function workLoop() {
     commitRoot();
   }
 }
+
 /* HACK 核心函数 */
 // 1. 处理当前的fiber，就是workInProgress
-// 2. 重新复制workInProgress
+// 2. 重新赋值workInProgress
 function performUnitOfWork(unitOfWork: Fiber /* workInProgress 下一个fiber */) {
 
-  // 每个fiber上都有一个alternate, 保存上一次更新
+  // 每个fiber上都有一个alternate, 保存上一次更新fiber
   const current = unitOfWork.alternate;
 
-  // !! 真正开始执行
+  // !! 真正开始执行, next是子节点
   let next = beginWork(current/* 老 */, unitOfWork/* 新 */); // 1. 处理fiber 2. 返回子节点
 
-  /* 关系如何找 --> 树深度优先 */
-  // next是子节点
+  /* 传递关系如何找 --> 树深度优先 */
   if (next === null) {
-    // 没有子节点
-    // 找兄弟、叔叔节点、爷爷的兄弟的节点等等
+    // 没有子节点, 找兄弟、叔叔节点、爷爷的兄弟的节点等等
     completeUnitOfWork(unitOfWork);
   } else {
-    // 有next, 有子节点
-    // NOTE 返回 到 workLoop -> while
+    // 有next子节点, 赋值传递, 重新回到workLoop的while循环
     workInProgress = next;
   }
 }
 
-// "树的深度优先"
-// 没有子节点->找兄弟->找叔叔->找爷爷节点
+// "树的深度优先" 没有子节点->找兄弟->找叔叔->找爷爷节点
 function completeUnitOfWork(unitOfWork: Fiber) {
+
+  // 移动fiber, 找规律与while循环
   let completedWork: Fiber = unitOfWork;
 
   do {
+    // 特殊情况
     if (completedWork.tag === ContextProvider) {
       const context: ReactContext<any> = completedWork.type._context;
       popProvider(context);
     }
-    const siblingFiber = completedWork.sibling;
 
-    // 有兄弟节点
+    // 1. 先cw.sibling
+    const siblingFiber = completedWork.sibling;
     if (siblingFiber !== null) {
       workInProgress = siblingFiber;
-      return;
+      return; // NOTE <-- 直到找到兄弟节点才返回
     }
 
+    // 2. 后cw.return
     const returnFiber = completedWork.return;
     completedWork = returnFiber;
     workInProgress = completedWork;
