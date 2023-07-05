@@ -3,7 +3,7 @@ import {createFiberFromElement, createFiberFromText} from "./ReactFiber";
 import {Placement, Update} from "./ReactFiberFlags";
 import {Fiber} from "./ReactInternalTypes";
 
-// 删除单个节点
+// HACK 删除单个节点, 删除子节点都是在父fiber的deletions上统一登记
 function deleteChild(returnFiber: Fiber, childToDelete: Fiber) {
   const deletions = returnFiber.deletions;
   if (deletions) {
@@ -13,9 +13,9 @@ function deleteChild(returnFiber: Fiber, childToDelete: Fiber) {
   }
 }
 
+// 删除一个父fiber(returnFiber), 下面的所有子节点fiber.child, 单链表不断前进(advande)
 function deleteRemainingChildren(returnFiber: Fiber, currentFirstChild: Fiber) {
   let childToDelete = currentFirstChild;
-
   while (childToDelete) {
     deleteChild(returnFiber, childToDelete);
     childToDelete = childToDelete.sibling;
@@ -99,6 +99,8 @@ export function reconcileChildren(
   // *1. 从左边往右遍历，比较新老节点，如果节点可以复用，继续往右，否则就停止
   for (; oldFiber && newIndex < newChildren.length; newIndex++) {
     const newChild = newChildren[newIndex];
+
+    // 排除null
     if (newChild == null) {
       continue;
     }
@@ -117,7 +119,7 @@ export function reconcileChildren(
       break;
     }
 
-    // child转成fiber
+    // NOTE child转成fiber
     let newFiber: Fiber;
     if (isStr(newChild)) {
       newFiber = createFiberFromText(newChild, returnFiber);
@@ -166,7 +168,7 @@ export function reconcileChildren(
       } else {
         newFiber = createFiberFromElement(newChild, returnFiber);
       }
-      newFiber.flags = Placement;
+      newFiber.flags = Placement; // 新增
 
       lastPlacedIndex = placeChild(
         newFiber,
@@ -176,9 +178,11 @@ export function reconcileChildren(
       );
 
       // 找到第一个child, 作为链表头; 其余的通过sibling连接起来
+      // 找到第一个: null锁
       if (previousNewFiber === null) {
         resultingFirstChild = newFiber;
       } else {
+        // 除了第一个child, 剩余的都用sibling链接起来
         previousNewFiber.sibling = newFiber;
       }
       previousNewFiber = newFiber;

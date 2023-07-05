@@ -18,6 +18,7 @@ import {
   ContextConsumer,
 } from "./ReactWorkTags";
 
+// ReactFiberBeginWork.js
 // HACK 根据标记 ---> 执行不同的内容 "分发模式 Dispatch"
 // 函数组件 / 原生组件 / 类组件 / Fragment ...
 // 1. 处理当前fiber，因为不同组件对应的fiber处理方式不同，
@@ -54,7 +55,7 @@ export function beginWork(current: Fiber | null, workInProgress: Fiber) {
   }
 }
 
-// 跟fiber
+// 根fiber
 function updateHostRoot(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
@@ -75,6 +76,7 @@ function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
   // children 来源于React.createElement 嵌套 -> 数组
   let nextChildren = workInProgress.pendingProps.children;
 
+  // 不作为子节点的文本
   // 特殊情况: 文本 innerText ...
   const isDirectTextChild = shouldSetTextContent(
     type,
@@ -87,6 +89,7 @@ function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
   }
 
   // HACK *** 处理children: Element数组 -> fiber单链表
+  // reconcileChildren 协调
   workInProgress.child = reconcileChildren(
     current,
     workInProgress,
@@ -172,7 +175,6 @@ function updateContextConsumer(current: Fiber | null, workInProgress: Fiber) {
 
   const newChildren = render(newValue);
 
-  // 处理children数组为连边
   workInProgress.child = reconcileChildren(
     current,
     workInProgress,
@@ -182,6 +184,7 @@ function updateContextConsumer(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
 
+// textContent = childText
 function shouldSetTextContent(type: string, props: any): boolean {
   return (
     type === "textarea" ||
@@ -195,23 +198,29 @@ function shouldSetTextContent(type: string, props: any): boolean {
 }
 
 // 合成事件
+// HACK 处理属性, 关键是: children / 事件
 export function updateNode(node, prevVal, nextVal) {
   Object.keys(prevVal)
     // .filter(k => k !== "children")
     .forEach((k) => {
+
+      // 文本
       if (k === "children") {
         // 有可能是文本
         if (isStr(nextVal[k]) || isNum(nextVal[k])) {
           node.textContent = "";
         }
+      // 事件
       } else if (k.slice(0, 2) === "on") {
         const eventName = k.slice(2).toLocaleLowerCase();
         node.removeEventListener(eventName, prevVal[k]);
+      // 普通属性
       } else {
         if (!(k in nextVal)) {
           node[k] = "";
         }
       }
+      // style对象
     });
 
   Object.keys(nextVal)

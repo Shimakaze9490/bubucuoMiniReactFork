@@ -20,7 +20,7 @@ import {REACT_FRAGMENT_TYPE, REACT_PROVIDER_TYPE} from "shared/ReactSymbols";
 import {REACT_CONTEXT_TYPE} from "../../shared/ReactSymbols";
 
 // NOTE 梳理下调用链: createFiberFromElement / createFiberFromTypeAndProps / createFiberFromText --> createFiber --> new FiberNode();
-// 二级方法 -> 一级方法 -> 核心方法
+// 三个二级方法 -> 一级方法 -> 构造函数
 
 // 基础方法createFiber: "工厂方法" 返回FoberNode构造函数的实例
 // 创建一个fiber
@@ -28,7 +28,7 @@ export function createFiber(
   tag: WorkTag,
   pendingProps: any,
   key: null | string,
-  returnFiber: Fiber | null, // returnFiber 代表父级fiber
+  returnFiber: Fiber | null, // returnFiber 代表父级fiber, 每一个fiber诞生都需要知道父fiber
 ): Fiber {
   return new FiberNode(tag, pendingProps, key, returnFiber);
 }
@@ -53,14 +53,15 @@ function FiberNode(
   // 类组件：实例
   this.stateNode = null;
 
-  // Fiber
+  // HACK Fiber 关系
   this.return = returnFiber; //null;
   this.child = null;
   this.sibling = null;
   // 记录了节点在兄弟节点中的位置下标，用于diff时候判断节点是否需要发生移动
   this.index = 0;
 
-  this.pendingProps = pendingProps; // <----- Element.props
+  this.pendingProps = pendingProps; // <----- Element.props, 里面包含children属性
+
   this.memoizedProps = null;
   this.updateQueue = null;
   // 不同的组件的 memoizedState 指代也不同
@@ -68,7 +69,7 @@ function FiberNode(
   // 类组件 state
   this.memoizedState = null;
 
-  // Effects
+  // Effects, 操作flags: Placement 新增
   this.flags = NoFlags;
   this.subtreeFlags = NoFlags;
   // 记录要删除的子节点

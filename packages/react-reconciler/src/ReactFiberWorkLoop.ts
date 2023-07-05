@@ -39,26 +39,25 @@ export function updateContainer(element: ReactElement, root: FiberRoot) {
 
 // ! 基于当前的fiber执行更新: 分为几个任务, 本身 / child / sibling ...
 export function scheduleUpdateOnFiber(root: FiberRoot, fiber: Fiber) {
-
   // fiber需要遍历处理，通过全局变量维护方便点: wip, wipRoot
   workInProgressRoot = root;
   workInProgress = fiber;
 
   // HACK 就是之前写的scheduleCallback --> callback 封装成任务, 使其被调度 --> workLoop
+  // 第一次调度: scheduleCallback
   Scheduler.scheduleCallback(NormalPriority, workLoop);
 }
 
 // callback === '任务本身', 处理一个个的fiber单位
+// HACK 两大核心任务: fiber的比较更新 / fiber映射成真实DOM
 function workLoop() {
-
-  // HACK 两大核心任务: fiber的比较更新 / fiber映射成真实DOM
-
-  // 第一步: 处理所有fiber的内容
+  // 第一步: 处理所有fiber的内容:
+  // performUnitOfWork --> beginWork(分发) / completeUnitOfWork --> updateHostComponent --> stateNode / wip.child = reconcileChildren;
   while (workInProgress !== null) {
     performUnitOfWork(workInProgress);
   }
 
-  // 第二步: fiber映射成正式节点 "commit", 开端root
+  // 第二步: fiber映射成真实节点 "commit", 开端root
   if (!workInProgress && workInProgressRoot) {
     commitRoot();
   }
@@ -85,9 +84,16 @@ function performUnitOfWork(unitOfWork: Fiber /* workInProgress 下一个fiber */
   }
 }
 
+// DOM节点创建与插入: const instance = createInstance / appendAllChildren / workInProgress.stateNode = instance;
+
+// completeUnitOfWork是completeWork阶段的入口。它内部有一个循环，会自下而上地遍历workInProgress节点，依次处理节点。
+// 对HostComponent组件完成更新props、绑定事件等DOM相关的工作。
+
+// completeWork的内容两个:
+// 自下而上将第一层插入到当前节点 / 计算DOM节点属性, Update的effectTag标记
+// completeUnitOfWork 将符合条件的 Fiber 子下而上放到 Effect 链中（Delection 是 beginWork 的时候就放到了 Effect 链中）
 // "树的深度优先" 没有子节点->找兄弟->找叔叔->找爷爷节点
 function completeUnitOfWork(unitOfWork: Fiber) {
-
   // 移动fiber, 找规律与while循环
   let completedWork: Fiber = unitOfWork;
 
@@ -109,14 +115,19 @@ function completeUnitOfWork(unitOfWork: Fiber) {
     const returnFiber = completedWork.return;
     completedWork = returnFiber;
     workInProgress = completedWork;
-  } while (completedWork);
+
+  } while (completedWork); // 这里终止条件: 直到根fiber, 根节点
 }
 
 function commitRoot() {
-  commitMutationEffects(workInProgressRoot.current.child, workInProgressRoot);
-
+  // 根fiber.child
   const root = workInProgressRoot.current.child;
+  // workInProgressRoot.containerInfo.appendChild(workInProcessRoot.current.child.stateNode);
 
+  // 往下提交子节点, 更新, 副作用
+  commitMutationEffects(root, workInProgressRoot);
+
+  // 第二次调度: scheduleCallback
   Scheduler.scheduleCallback(NormalPriority, () => {
     flushPassiveEffect(root);
     return;
@@ -130,11 +141,12 @@ function commitMutationEffects(finishedWork: Fiber, root: FiberRoot) {
   // 注意: 这个方法是个递归child
   recursivelyTraverseMutationEffects(root, finishedWork);
 
-  // 真正提交的地方
+  // 真正提交的地方, 也是个分发函数，
   commitReconciliationEffects(finishedWork);
 }
 
 // ?? 作用是: 
+// 处理fiber
 function recursivelyTraverseMutationEffects(
   root: FiberRoot,
   parentFiber: Fiber
@@ -142,8 +154,11 @@ function recursivelyTraverseMutationEffects(
   let child = parentFiber.child;
 
   while (child !== null) {
+    // 处理fiber上的更新提交，每一个fiber都需要分发根据类型调用具体的提交函数
+    // 然后传递给下一个（同一级）
     commitMutationEffects(child, root);
     // TODO
+    // 传递，下一个
     child = child.sibling;
   }
 }
@@ -155,11 +170,13 @@ function commitReconciliationEffects(finishedWork: Fiber) {
 
   // 位运算比较
   if (flags & Placement) {
+    // commitPlacement 在dom上，把子节点插到父节点
     commitPlacement(finishedWork);
     // 位运算, 去除
     finishedWork.flags &= ~Placement;
   }
 
+  // HACK 分发提交, 如果是原生标签如何提交;
   if (flags & Update) {
     switch (finishedWork.tag) {
       case HostComponent:
@@ -176,7 +193,7 @@ function commitReconciliationEffects(finishedWork: Fiber) {
         commitHookEffects(finishedWork, HookLayout);
     }
 
-    finishedWork.flags &= ~Update;
+    finishedWork.flags &= ~Update; // 取非，去除
   }
 
   if (finishedWork.deletions) {
@@ -189,6 +206,11 @@ function commitReconciliationEffects(finishedWork: Fiber) {
     finishedWork.deletions = null;
   }
 }
+
+
+
+
+
 
 function commitHookEffects(finishedWork: Fiber, hookFlags: HookFlags) {
   const updateQueue = finishedWork.updateQueue;
@@ -208,6 +230,7 @@ function commitHookEffects(finishedWork: Fiber, hookFlags: HookFlags) {
   }
 }
 
+// passive adj.被动的
 function flushPassiveEffect(finishedWork: Fiber) {
   recursivelyTraversePassiveMountEffects(finishedWork);
   commitPassiveMountOnFiber(finishedWork);
@@ -258,6 +281,15 @@ function getStateNode(fiber: Fiber) {
 
 // 在dom上，把子节点插入到父节点里
 function commitPlacement(finishedWork: Fiber) {
+
+  // 不断向上找returnFiber 父节点
+  // let parent = fiber.return;
+  // while (parent !== null) {
+  //   if (isHostParent(parent)) {
+  //     return parent;
+  //   }
+  //   parent = parent.return;
+  // }
   const parentFiber = getHostParentFiber(finishedWork);
 
   // 插入父dom
@@ -273,7 +305,10 @@ function commitPlacement(finishedWork: Fiber) {
     }
 
     // dom节点
+    // TODO ?? 传递到下一个fiber
     const before = getHostSibling(finishedWork);
+
+    // 新增插入: parent.appendChild(stateNode);
     insertOrAppendPlacementNode(finishedWork, before, parent);
     // parent.appendChild(finishedWork.stateNode);
   }
@@ -282,7 +317,6 @@ function commitPlacement(finishedWork: Fiber) {
 // 返回 fiber 的父dom节点对应的fiber
 function getHostParentFiber(fiber: Fiber): Fiber {
   let parent = fiber.return;
-
   while (parent !== null) {
     if (isHostParent(parent)) {
       return parent;
