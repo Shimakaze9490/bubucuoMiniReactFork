@@ -69,6 +69,19 @@ class ClassComponent extends Component {
   }
 }
 
+// Reconclie 协调入口
+// container 容器DOM
+// JSX, 编译后 Element嵌套结构
+/*
+  {
+    ...
+    props: {
+      id: 123,
+      style: {},
+      children: [...], // 下一层Element
+    }
+  }
+*/
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <FunctionComponent name="函数组件" />
 );

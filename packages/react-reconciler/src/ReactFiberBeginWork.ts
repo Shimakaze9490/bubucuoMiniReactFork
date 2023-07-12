@@ -55,7 +55,7 @@ export function beginWork(current: Fiber | null, workInProgress: Fiber) {
   }
 }
 
-// 根fiber
+// 根fiber: 从jsx开始更新，而不是外壳
 function updateHostRoot(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
@@ -130,12 +130,15 @@ function updateClassComponent(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
 
-// 文本节点
+// 文本分为两种: 单纯文本作为textContent属性即可; 混入其他节点的 才createTextNode
+// 文本节点: 仅处理它本身，没有child的
 function updateHostText(current: Fiber | null, workInProgress: Fiber) {
+  // Element 如何对待文本节点的
+  // document.createTextNode(pendingProps)
   const {pendingProps} = workInProgress;
 
   if (!workInProgress.stateNode) {
-    workInProgress.stateNode = document.createTextNode(pendingProps);
+    workInProgress.stateNode = document.createTextNode(pendingProps); // omg文本
   }
   return null;
 }

@@ -101,7 +101,7 @@ export function createFiberFromElement(
   const {type, key} = element;
 
   /* HACK 特别注意pendingProps属性是哪里来的 ? Element的props */
-  const pendingProps = element.props;
+  const pendingProps = element.props; // 文本节点的 props: 'omg文本',
   const fiber = createFiberFromTypeAndProps(
     type,
     key,

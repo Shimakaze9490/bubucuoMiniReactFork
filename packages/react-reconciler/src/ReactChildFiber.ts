@@ -177,6 +177,7 @@ export function reconcileChildren(
         shouldTrackSideEffects
       );
 
+      // HACK 获取链表头
       // 找到第一个child, 作为链表头; 其余的通过sibling连接起来
       // 找到第一个: null锁
       if (previousNewFiber === null) {
@@ -185,6 +186,7 @@ export function reconcileChildren(
         // 除了第一个child, 剩余的都用sibling链接起来
         previousNewFiber.sibling = newFiber;
       }
+      // [1] --> 2 --> 3 --> 4 --> 5
       previousNewFiber = newFiber;
     }
   }

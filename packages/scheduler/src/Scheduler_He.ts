@@ -6,11 +6,11 @@ import {
 import { getCurrentTime, isFn, isObject } from "shared/utils";
 import { push, peek, pop } from "./SchedulerMinHeap";
 
-/*
-  HACK
-*/
+// *** 这是最后具体执行的"任务"内容
+// 如, scheduleUpdateOnFiber里面的workLoop(reconcile) 和 commitRoot里面的flushPassiveEffect
+type Callback = any;
 
-type Callback = any; // (...args: any[]) => void | any;
+// 一个callback构造成一个单位的任务
 export interface Task {
   id: number;
   callback: Callback;
@@ -22,30 +22,37 @@ export interface Task {
 
 type HostCallback = (hasTimeRemaining: boolean, currentTime: number) => boolean;
 
-// 任务存储, 最小堆
+// 两个任务池: 立即执行任务池 与 延时执行任务池, 用minHeap来操作
 const taskQueue: Array<Task> = [];
 const timerQueue: Array<Task> = [];
 
+// 唯一的任务id
 let taskIdCounter: number = 1;
 
 let currentTask: Task | null = null; // 当前正在处理中的任务
 let currentPriorityLevel: PriorityLevel = NormalPriority; // 当前处理中的任务的优先级
 
-// 在计时
+// 定时任务锁
 let isHostTimeoutScheduled: boolean = false;
 
-// 在调度任务
+// 调度任务锁
 let isHostCallbackScheduled = false;
 
+// 执行任务锁, 最后执行callback使用
 // This is set while performing work, to prevent re-entrance.
-// 防止重复介入 ?? 后续理解
 let isPerformingWork = false;
 
+// 宏任务锁, MessageChannel使用
 let isMessageLoopRunning = false; // 有点像事件循环的锁, 在requestHostCallback的时间切片要用到
 
-let scheduledHostCallback: HostCallback | null = null; // ??
-let taskTimeoutID: any = -1; // 用于维护倒计时, 以及取消倒计时的
+// 就是callback的全局状态, 便于跨函数，跨事件循环操作
+let scheduledHostCallback: HostCallback | null = null;
 
+// 倒计时的返回值，便于取消倒计时
+let taskTimeoutID: any = -1;
+
+// performWorkUntilDeadline中使用, 触发MessageChannel的postMessage
+// 也就是当前这轮事件循环的结束, 开启下一轮事件循环
 let schedulePerformWorkUntilDeadline: Function;
 
 let startTime = -1; // 每一个时间切片的开始时刻, 在 宏任务入口赋值, performWorkUnitDeadline
