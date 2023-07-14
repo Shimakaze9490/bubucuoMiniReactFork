@@ -116,7 +116,8 @@ function getRootForUpdatedFiber(sourceFiber: Fiber): FiberRoot {
   return node.tag === HostRoot ? node.stateNode : null;
 }
 
-// initialState 函数 | state
+// HACK useState --> useReducer
+// initialState: 函数 | state
 export function useState(initialState: any) {
   return useReducer(null, isFn(initialState) ? initialState() : initialState);
 }

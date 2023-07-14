@@ -4,6 +4,7 @@ import {Placement, Update} from "./ReactFiberFlags";
 import {Fiber} from "./ReactInternalTypes";
 
 // HACK 删除单个节点, 删除子节点都是在父fiber的deletions上统一登记
+// 父fiber 上deletions数组, 维护所有需要删除的子fiber
 function deleteChild(returnFiber: Fiber, childToDelete: Fiber) {
   const deletions = returnFiber.deletions;
   if (deletions) {
@@ -14,6 +15,7 @@ function deleteChild(returnFiber: Fiber, childToDelete: Fiber) {
 }
 
 // 删除一个父fiber(returnFiber), 下面的所有子节点fiber.child, 单链表不断前进(advande)
+// 链表往后删除, while + sibling
 function deleteRemainingChildren(returnFiber: Fiber, currentFirstChild: Fiber) {
   let childToDelete = currentFirstChild;
   while (childToDelete) {
@@ -22,6 +24,10 @@ function deleteRemainingChildren(returnFiber: Fiber, currentFirstChild: Fiber) {
   }
 }
 
+// 将子fiber链表生成哈希Map结构 !!
+// HACK 两个数组分别匹配的算法, 一般都是将一方构造成哈希Map, 这样防止复杂度过高
+// Map"匹配" --> 用旧fiber链生成Map，用新节点来匹配取，取到就移除；剩余的就直接删除掉！！
+// [key || index]: fiber,
 function mapRemainingChildren(currentFirstChild: Fiber) {
   const existingChildren = new Map();
 
@@ -73,6 +79,9 @@ function placeChild(
 
 // 初次渲染, 更新
 // 正常的数组children: Element数组 ---> fiber单链表
+
+// 旧版reconcileChildren, 只处理了新增, 没有更新 ??
+// 这里没有旧版函数, 对比下视频
 export function reconcileChildren(
   current: Fiber | null,
   returnFiber: Fiber,
@@ -87,7 +96,7 @@ export function reconcileChildren(
   let newIndex = 0;
   let resultingFirstChild = null;
   let previousNewFiber = null;
-  let oldFiber = returnFiber.alternate?.child;
+  let oldFiber = returnFiber.alternate?.child; // 注意这里关系: returnFiber alternate child
   let nextOldFiber = null; //暂存oldFiber
 
   // 记录上次节点插入的位置，判断节点位置是否发生变化

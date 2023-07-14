@@ -121,6 +121,9 @@ function completeUnitOfWork(unitOfWork: Fiber) {
 
 function commitRoot() {
   // 根fiber.child
+
+  // 这里的root 根fiber的第一个子节点，这里是不严谨的
+  // 如果第一个jsx的fiber是函数组件，就没有dom
   const root = workInProgressRoot.current.child;
   // workInProgressRoot.containerInfo.appendChild(workInProcessRoot.current.child.stateNode);
 
@@ -196,13 +199,24 @@ function commitReconciliationEffects(finishedWork: Fiber) {
     finishedWork.flags &= ~Update; // 取非，去除
   }
 
+  // 当一个fiber上有deletions数组字段, 将会依次删除该childFiber
+  // 父子两者都是fiber操作
   if (finishedWork.deletions) {
+    // 这里需要的是文档流上的删除: dom上删除需要获取真实父节点, 
     // parentFiber 是 deletions 的父dom节点对应的fiber
+    // fiber.tag === HostComponent || fiber.tag === HostRoot;
+
+    // 往上查找，直到找到真实stateNode
     const parentFiber = isHostParent(finishedWork)
       ? finishedWork
       : getHostParentFiber(finishedWork);
+    
+    // 父fiber的真实dom: stateNode
     const parent = parentFiber.stateNode;
+    // 不断遍历链表, 执行 parent.removeChild
     commitDeletions(finishedWork.deletions, parent);
+
+    // 清空
     finishedWork.deletions = null;
   }
 }
@@ -258,7 +272,7 @@ function commitPassiveMountOnFiber(finishedWork: Fiber) {
 
 function commitDeletions(deletions: Array<Fiber>, parent: Element) {
   deletions.forEach((deletion) => {
-    // 找到deletion的dom节点
+    // 找到deletion的fiber的dom节点, 如果没有呢? 往后移 node = node.child;
     parent.removeChild(getStateNode(deletion));
   });
 }
@@ -275,7 +289,7 @@ function getStateNode(fiber: Fiber) {
     if (isHost(node) && node.stateNode) {
       return node.stateNode;
     }
-    node = node.child;
+    node = node.child; // 往后移
   }
 }
 
@@ -290,6 +304,8 @@ function commitPlacement(finishedWork: Fiber) {
   //   }
   //   parent = parent.return;
   // }
+
+  // 找父DOM，部分fiber是没有stateNode的
   const parentFiber = getHostParentFiber(finishedWork);
 
   // 插入父dom
@@ -300,16 +316,20 @@ function commitPlacement(finishedWork: Fiber) {
     // 获取父dom节点
     let parent = parentFiber.stateNode;
 
+    // 根节点的dom
     if (parent.containerInfo) {
       parent = parent.containerInfo;
     }
 
     // dom节点
     // TODO ?? 传递到下一个fiber
+    // 插入节点的坐标节点，原生DOM，作为相对标准位置
     const before = getHostSibling(finishedWork);
 
-    // 新增插入: parent.appendChild(stateNode);
+    // 如果这里直接dom节点插入, 就没法复用和移动位置
+    // HACK insertBefore; insertAfter 前后位置都可能插入新节点
     insertOrAppendPlacementNode(finishedWork, before, parent);
+    // 新增插入: parent.appendChild(stateNode);
     // parent.appendChild(finishedWork.stateNode);
   }
 }
@@ -340,13 +360,16 @@ function getHostSibling(fiber: Fiber) {
       if (node.return === null || isHostParent(node.return)) {
         return null;
       }
-      node = node.return;
+      node = node.return; // 往上查找
     }
 
     node.sibling.return = node.return;
     node = node.sibling;
 
+    // 找到原生节点，原生文本
     while (node.tag !== HostComponent && node.tag !== HostText) {
+
+      // 含有Placement  新增 插入移动
       if (node.flags & Placement) {
         // Placement表示节点是新增插入或者移动位置
         continue sibling;
@@ -365,25 +388,31 @@ function getHostSibling(fiber: Fiber) {
     }
   }
 }
-// 新增插入 | 位置移动
+// 同时处理这两者: 新增插入 | 位置移动
 // insertBefore | appendChild
 function insertOrAppendPlacementNode(
-  node: Fiber,
-  before: Element,
-  parent: Element
+  node: Fiber, // finishedWork
+  before: Element, // 真实节点 HTMLElement
+  parent: Element // 真实节点 HTMLElement
 ) {
   const {tag} = node;
-  const isHost = tag === HostComponent || HostText;
+  // HACK 待插入的子节点必须是: 原生标签，原生文本
+  const isHost = tag === HostComponent || tag === HostText;
+
   if (isHost) {
+    // 拿到真实节点
     const stateNode = node.stateNode;
+    // 判断在前方 后方位置插入
     if (before) {
       parent.insertBefore(stateNode, before);
     } else {
       parent.appendChild(stateNode);
     }
   } else {
+    // 非原生节点的情况: 往下多找一层, node.child
     const child = node.child;
     if (child !== null) {
+      // HACK 开始向下递归了, 一层层child处理
       insertOrAppendPlacementNode(child, before, parent);
       let sibling = child.sibling;
       while (sibling !== null) {
