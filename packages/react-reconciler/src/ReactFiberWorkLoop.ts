@@ -19,6 +19,16 @@ import {
 } from "./ReactHookEffectTags";
 import {popProvider} from "./ReactNewContext";
 
+/* NOTE 统计函数调用次数 */
+declare global {
+  interface Window {
+    count_performUnitOfWork: number;
+    count_workLoop: number;
+  }
+}
+window.count_performUnitOfWork = 0;
+window.count_workLoop = 0;
+
 // HACK Current当前fiber； wip正在构建的fiber
 // work in progress 正在工作当中的
 let workInProgress: Fiber | null = null;
@@ -27,18 +37,24 @@ let workInProgressRoot: FiberRoot | null = null;
 // HACK 被调用render()
 // Element嵌套 --> Fiber链
 export function updateContainer(element: ReactElement, root: FiberRoot) {
+  // debugger;
   // 需要将element转成fiber，其父级fiber就是root.current
   // 联系起来，fiber.child = childFiber;
   root.current.child = createFiberFromElement(element, root.current);
   // 新fiber默认操作 Placement === 新增
   root.current.child.flags = Placement;
 
+  // debugger;
   /* NOTE 开始基于fiber链的更新调度了 */
+  // root: 是根fiber实例对象
+  // root.current: 是FiberNode头fiber
   scheduleUpdateOnFiber(root, root.current);
 }
 
 // ! 基于当前的fiber执行更新: 分为几个任务, 本身 / child / sibling ...
 export function scheduleUpdateOnFiber(root: FiberRoot, fiber: Fiber) {
+  // count_scheduleUpdateOnFiber += 1;
+  // scheduleUpdateOnFiber = scheduleUpdateOnFiber.count === undefined ? 0 : scheduleUpdateOnFiber.count;
   // fiber需要遍历处理，通过全局变量维护方便点: wip, wipRoot
   workInProgressRoot = root;
   workInProgress = fiber;
@@ -51,6 +67,13 @@ export function scheduleUpdateOnFiber(root: FiberRoot, fiber: Fiber) {
 // callback === '任务本身', 处理一个个的fiber单位
 // HACK 两大核心任务: fiber的比较更新 / fiber映射成真实DOM
 function workLoop() {
+  window.count_workLoop += 1;
+
+  // workLoop仅调用了一次; 但是performUnitOfWork调用了2次, 说明此时的workInProgress有一个child
+  // 关系: wip -> childFiber -> childNull
+  console.log('workInProgress', workInProgress);
+  debugger;
+
   // 第一步: 处理所有fiber的内容:
   // performUnitOfWork --> beginWork(分发) / completeUnitOfWork --> updateHostComponent --> stateNode / wip.child = reconcileChildren;
   while (workInProgress !== null) {
@@ -67,6 +90,8 @@ function workLoop() {
 // 1. 处理当前的fiber，就是workInProgress
 // 2. 重新赋值workInProgress
 function performUnitOfWork(unitOfWork: Fiber /* workInProgress 下一个fiber */) {
+
+  window.count_performUnitOfWork += 1;
 
   // 每个fiber上都有一个alternate, 保存上一次更新fiber
   const current = unitOfWork.alternate;

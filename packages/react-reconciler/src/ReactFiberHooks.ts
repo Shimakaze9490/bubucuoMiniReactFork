@@ -16,11 +16,13 @@ import {HostRoot} from "./ReactWorkTags";
 import {ReactContext} from "../../shared/ReactTypes";
 import {readContext} from "./ReactNewContext";
 
+// 一个单位的hook数据结构
 type Hook = {
-  memoizedState: any; // state
-  next: Hook | null; // 下一个hook
+  memoizedState: any;
+  next: Hook | null;
 };
 
+// 一个副作用effect数据结构
 type Effect = {
   tag: HookFlags;
   create: () => (() => void) | void;
@@ -28,21 +30,29 @@ type Effect = {
   next: Effect | null;
 };
 
+// 当前的fiber对象
 let currentlyRenderingFiber: Fiber = null;
+// 这里有两个hook ?? 区别是
 let workInProgressHook: Hook = null;
 let currentHook: Hook = null;
 
+// HACK 这里是hooks的入口 !!!
 // 获取当前正在执行的函数组件的fiber
+// renderHooks 这个函数仅仅初始化, 没有任何具体的操作逻辑
+// 更具体的要到 useReducer, useRffect 里面去找
 export function renderHooks(workInProgress: Fiber) {
-  currentlyRenderingFiber = workInProgress;
-  currentlyRenderingFiber.updateQueue = null;
-  workInProgressHook = null;
+  currentlyRenderingFiber = workInProgress; // fiber
+  currentlyRenderingFiber.updateQueue = null; // fiber上面updateQueue = []; 维护的是什么?
+  workInProgressHook = null; // 正在处理中的具体hook
 }
 
 function updateWorkInProgressHook(): Hook {
   let hook: Hook;
 
+  // alternate "备份"
+  // TODO 下次从这里继续
   const current = currentlyRenderingFiber.alternate;
+
   if (current) {
     currentlyRenderingFiber.memoizedState = current.memoizedState;
     if (workInProgressHook) {
@@ -72,6 +82,8 @@ function updateWorkInProgressHook(): Hook {
 }
 
 export function useReducer(reducer: Function, initialState: any) {
+
+  // ??
   const hook = updateWorkInProgressHook();
 
   if (!currentlyRenderingFiber.alternate) {

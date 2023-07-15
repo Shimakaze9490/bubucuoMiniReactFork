@@ -17,6 +17,7 @@ export function createFiberRoot(containerInfo: Container): FiberRoot {
   const root: FiberRoot = new FiberRootNode(containerInfo);
 
   /* 外层多了一层，root实例包裹着fiber实例 */
+  // TODO 这两句有点没懂 ??? root 与 root.current 的关系: 根fiber与头fiber
   root.current = createFiber(HostRoot, null, null, null);
   root.current.stateNode = root;
 
@@ -24,6 +25,7 @@ export function createFiberRoot(containerInfo: Container): FiberRoot {
 }
 
 export function FiberRootNode(containerInfo) {
+  this._name = 'Class_FiberRootNode';
   this.containerInfo = containerInfo; // 挂载的真实节点
   // this.pendingChildren = null;
   // this.current = createFiber(...);

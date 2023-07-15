@@ -82,6 +82,11 @@ class ClassComponent extends Component {
     }
   }
 */
+
+// 旧版ReactDOM.render
+// 新版ReactDOM.createRoot.render
+// HACK ==> 源码的入口
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <FunctionComponent name="函数组件" />
+  // <FunctionComponent name="函数组件" />
+  <div>JOKER</div>
 );

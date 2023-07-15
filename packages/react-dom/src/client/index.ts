@@ -5,6 +5,7 @@ import {updateContainer} from "react-reconciler/src/ReactFiberWorkLoop";
 
 /* ReactDOMRoot 这一层基本没啥内容，就是原型上拓展了几个方法，如render */
 function ReactDOMRoot(internalRoot: FiberRoot) {
+  this._name = 'Class_ReactDOMRoot';
   this._internalRoot = internalRoot;
 }
 
@@ -22,6 +23,7 @@ ReactDOMRoot.prototype.render = function (children /* jsx -> React.createElement
 
 // createRoot是暴露给外界使用的方法, 放在client里面; 不在reconciler
 // createRoot也是一个工厂方法: 包含两步: createFiberRoot / ReactDOMRoot
+// container: <div id='root'>...</div>
 export function createRoot(container: Element | Document | DocumentFragment) {
 
   // 根对象root 其中 root.current才是根fiber; root.containerInfo才是容器信息

@@ -58,6 +58,7 @@ function FiberNode(
   this.child = null;
   this.sibling = null;
   // 记录了节点在兄弟节点中的位置下标，用于diff时候判断节点是否需要发生移动
+  // 位置 --> 判断移动
   this.index = 0;
 
   this.pendingProps = pendingProps; // <----- Element.props, 里面包含children属性

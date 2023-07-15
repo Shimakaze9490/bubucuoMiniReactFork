@@ -101,11 +101,17 @@ function updateHostComponent(current: Fiber | null, workInProgress: Fiber) {
 
 // 函数组件
 function updateFunctionComponent(current: Fiber | null, workInProgress: Fiber) {
+  /* Hooks 是函数组件特有的 */
+  // HACK hooks渲染的入口在这 renderHooks(fnFiber) (来源 ReactFiberHooks.ts)
   renderHooks(workInProgress);
+
   prepareToReadContext(workInProgress);
   const {type, pendingProps} = workInProgress;
+
+  // type是函数本身, 执行后返回children, 也就是return的jsx
   const children = type(pendingProps);
 
+  // 再协调children, 转化为fiber链表
   workInProgress.child = reconcileChildren(current, workInProgress, children);
   return workInProgress.child;
 }
