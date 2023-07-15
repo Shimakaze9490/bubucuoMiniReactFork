@@ -12,9 +12,10 @@
   "keywords": [],
   "author": "bubucuo",
   "license": "ISC",
-  "dependencies": {
-  },
   "devDependencies": {
-    "vitest": "^0.22.1"
+    "@testing-library/react": "^14.0.0",
+    "@vitejs/plugin-react": "^4.0.3",
+    "jsdom": "^22.1.0",
+    "vitest": "^0.33.0"
   }
 }

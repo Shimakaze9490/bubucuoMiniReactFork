@@ -33,6 +33,7 @@ export function createRoot(container: Element | Document | DocumentFragment) {
   return new ReactDOMRoot(root);
 }
 
+export { ReactDOMRoot, updateContainer, createFiberRoot };
 export default {
   createRoot,
 };

@@ -1,8 +1,8 @@
-import {ReactContext, ReactElement} from "shared/ReactTypes";
-import {NormalPriority, Scheduler } from "scheduler";
-import {createFiberFromElement} from "./ReactFiber";
-import {FiberRoot, Fiber} from "./ReactInternalTypes";
-import {beginWork, updateNode} from "./ReactFiberBeginWork";
+import { ReactContext, ReactElement } from "shared/ReactTypes";
+import { NormalPriority, Scheduler } from "scheduler";
+import { createFiberFromElement } from "./ReactFiber";
+import { FiberRoot, Fiber } from "./ReactInternalTypes";
+import { beginWork, updateNode } from "./ReactFiberBeginWork";
 import {
   HostComponent,
   HostRoot,
@@ -10,24 +10,26 @@ import {
   FunctionComponent,
   ContextProvider,
 } from "./ReactWorkTags";
-import {Placement, Update, Passive} from "./ReactFiberFlags";
+import { Placement, Update, Passive } from "./ReactFiberFlags";
 import {
   HookLayout,
   HookFlags,
   // HookHasEffect,
   HookPassive,
 } from "./ReactHookEffectTags";
-import {popProvider} from "./ReactNewContext";
+import { popProvider } from "./ReactNewContext";
+
+var global = global || window;
 
 /* NOTE 统计函数调用次数 */
 declare global {
-  interface Window {
+  interface global {
     count_performUnitOfWork: number;
     count_workLoop: number;
   }
 }
-window.count_performUnitOfWork = 0;
-window.count_workLoop = 0;
+global.count_performUnitOfWork = 0;
+global.count_workLoop = 0;
 
 // HACK Current当前fiber； wip正在构建的fiber
 // work in progress 正在工作当中的
@@ -67,11 +69,11 @@ export function scheduleUpdateOnFiber(root: FiberRoot, fiber: Fiber) {
 // callback === '任务本身', 处理一个个的fiber单位
 // HACK 两大核心任务: fiber的比较更新 / fiber映射成真实DOM
 function workLoop() {
-  window.count_workLoop += 1;
+  global.count_workLoop += 1;
 
   // workLoop仅调用了一次; 但是performUnitOfWork调用了2次, 说明此时的workInProgress有一个child
   // 关系: wip -> childFiber -> childNull
-  console.log('workInProgress', workInProgress);
+  console.log("workInProgress", workInProgress);
   debugger;
 
   // 第一步: 处理所有fiber的内容:
@@ -90,14 +92,13 @@ function workLoop() {
 // 1. 处理当前的fiber，就是workInProgress
 // 2. 重新赋值workInProgress
 function performUnitOfWork(unitOfWork: Fiber /* workInProgress 下一个fiber */) {
-
-  window.count_performUnitOfWork += 1;
+  global.count_performUnitOfWork += 1;
 
   // 每个fiber上都有一个alternate, 保存上一次更新fiber
   const current = unitOfWork.alternate;
 
   // !! 真正开始执行, next是子节点
-  let next = beginWork(current/* 老 */, unitOfWork/* 新 */); // 1. 处理fiber 2. 返回子节点
+  let next = beginWork(current /* 老 */, unitOfWork /* 新 */); // 1. 处理fiber 2. 返回子节点
 
   /* 传递关系如何找 --> 树深度优先 */
   if (next === null) {
@@ -140,7 +141,6 @@ function completeUnitOfWork(unitOfWork: Fiber) {
     const returnFiber = completedWork.return;
     completedWork = returnFiber;
     workInProgress = completedWork;
-
   } while (completedWork); // 这里终止条件: 直到根fiber, 根节点
 }
 
@@ -173,7 +173,7 @@ function commitMutationEffects(finishedWork: Fiber, root: FiberRoot) {
   commitReconciliationEffects(finishedWork);
 }
 
-// ?? 作用是: 
+// ?? 作用是:
 // 处理fiber
 function recursivelyTraverseMutationEffects(
   root: FiberRoot,
@@ -227,7 +227,7 @@ function commitReconciliationEffects(finishedWork: Fiber) {
   // 当一个fiber上有deletions数组字段, 将会依次删除该childFiber
   // 父子两者都是fiber操作
   if (finishedWork.deletions) {
-    // 这里需要的是文档流上的删除: dom上删除需要获取真实父节点, 
+    // 这里需要的是文档流上的删除: dom上删除需要获取真实父节点,
     // parentFiber 是 deletions 的父dom节点对应的fiber
     // fiber.tag === HostComponent || fiber.tag === HostRoot;
 
@@ -235,7 +235,7 @@ function commitReconciliationEffects(finishedWork: Fiber) {
     const parentFiber = isHostParent(finishedWork)
       ? finishedWork
       : getHostParentFiber(finishedWork);
-    
+
     // 父fiber的真实dom: stateNode
     const parent = parentFiber.stateNode;
     // 不断遍历链表, 执行 parent.removeChild
@@ -245,11 +245,6 @@ function commitReconciliationEffects(finishedWork: Fiber) {
     finishedWork.deletions = null;
   }
 }
-
-
-
-
-
 
 function commitHookEffects(finishedWork: Fiber, hookFlags: HookFlags) {
   const updateQueue = finishedWork.updateQueue;
@@ -320,7 +315,6 @@ function getStateNode(fiber: Fiber) {
 
 // 在dom上，把子节点插入到父节点里
 function commitPlacement(finishedWork: Fiber) {
-
   // 不断向上找returnFiber 父节点
   // let parent = fiber.return;
   // while (parent !== null) {
@@ -393,7 +387,6 @@ function getHostSibling(fiber: Fiber) {
 
     // 找到原生节点，原生文本
     while (node.tag !== HostComponent && node.tag !== HostText) {
-
       // 含有Placement  新增 插入移动
       if (node.flags & Placement) {
         // Placement表示节点是新增插入或者移动位置
@@ -420,7 +413,7 @@ function insertOrAppendPlacementNode(
   before: Element, // 真实节点 HTMLElement
   parent: Element // 真实节点 HTMLElement
 ) {
-  const {tag} = node;
+  const { tag } = node;
   // HACK 待插入的子节点必须是: 原生标签，原生文本
   const isHost = tag === HostComponent || tag === HostText;
 
