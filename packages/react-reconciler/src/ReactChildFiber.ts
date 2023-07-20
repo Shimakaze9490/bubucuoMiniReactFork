@@ -28,6 +28,26 @@ function deleteRemainingChildren(returnFiber: Fiber, currentFirstChild: Fiber) {
 // HACK 两个数组分别匹配的算法, 一般都是将一方构造成哈希Map, 这样防止复杂度过高
 // Map"匹配" --> 用旧fiber链生成Map，用新节点来匹配取，取到就移除；剩余的就直接删除掉！！
 // [key || index]: fiber,
+
+/*
+
+  旧链: a --> b --> e
+  新链: b, e, f
+  形成的Map:
+  {
+    a,
+    b,
+    e
+  }
+
+  再通过新的"key, index" 去取:
+  1. 匹配到(可以复用), b, e
+  2. 需要新增, f
+  3. 新的用完了, 剩余旧的, 直接删除, a
+
+  额外操作: 每次匹配到 delete 掉
+*/
+
 function mapRemainingChildren(currentFirstChild: Fiber) {
   const existingChildren = new Map();
 
@@ -63,12 +83,15 @@ function placeChild(
   if (current) {
     // 节点更新
     const oldIndex = current.index;
+
+    // 我们现在处理到了 10, 而当前新节点需要 放到 5的位置
+
     if (oldIndex < lastPlacedIndex) {
       // 相对位置发生变化，需要发生位置移动，appendChild或者insertBefore
-      newFiber.flags |= Placement;
+      newFiber.flags |= Placement; // 给当前fiber增加 Placement
       return lastPlacedIndex;
     } else {
-      return oldIndex;
+      return oldIndex; // 直接push一项 ,  4, 8, 10, 15 单增的 , '7'
     }
   } else {
     // 新增插入
@@ -82,13 +105,15 @@ function placeChild(
 
 // 旧版reconcileChildren, 只处理了新增, 没有更新 ??
 // 这里没有旧版函数, 对比下视频
+
+// 这里diff的是 旧fiber 与 新Element
 export function reconcileChildren(
   current: Fiber | null,
   returnFiber: Fiber,
-  nextChildren: any // 数组、对象、文本
+  nextChildren: any // 数组、对象、文本 Element
 ): Fiber | null {
 
-  // 统一成数组
+  // 统一成数组: Element
   const newChildren = Array.isArray(nextChildren)
     ? nextChildren
     : [nextChildren];
@@ -102,12 +127,20 @@ export function reconcileChildren(
   // 记录上次节点插入的位置，判断节点位置是否发生变化
   let lastPlacedIndex = 0;
 
-  // 是否是组件更新
+  // 是否是组件更新: 初始化, 更新
   const shouldTrackSideEffects = !!returnFiber.alternate;
 
+  // fiber <---比较--> element
   // *1. 从左边往右遍历，比较新老节点，如果节点可以复用，继续往右，否则就停止
+
+  // 新有剩余，旧有剩余 才是最麻烦的情况
+  // 遍历检查中...
   for (; oldFiber && newIndex < newChildren.length; newIndex++) {
+
     const newChild = newChildren[newIndex];
+
+    // 1。 placeChild 这个函数
+    // 2。 oldFiber 和 nextOldFiber 关系和作用 !!!
 
     // 排除null
     if (newChild == null) {
@@ -121,14 +154,16 @@ export function reconcileChildren(
       nextOldFiber = oldFiber.sibling;
     }
 
+    // 判断 复用的条件
     if (!sameNode(newChild, oldFiber)) {
       if (oldFiber === null) {
         oldFiber = nextOldFiber;
       }
+      // 不能复用 后续不再继续diff了
       break;
     }
 
-    // NOTE child转成fiber
+    // NOTE child 转成 fiber
     let newFiber: Fiber;
     if (isStr(newChild)) {
       newFiber = createFiberFromText(newChild, returnFiber);
@@ -136,21 +171,26 @@ export function reconcileChildren(
       newFiber = createFiberFromElement(newChild, returnFiber);
     }
 
+    // 移动的情况
     lastPlacedIndex = placeChild(
       newFiber,
-      lastPlacedIndex,
+      lastPlacedIndex, // 上一次处理到的位置
       newIndex,
       shouldTrackSideEffects
     );
 
+    // 具体如何复用fiber的
     Object.assign(newFiber, {
-      stateNode: oldFiber.stateNode,
-      alternate: oldFiber,
-      flags: Update,
+      stateNode: oldFiber.stateNode, // dom
+      alternate: oldFiber, // 备份更新
+      flags: Update, // 更新
     });
+
+    // 判断 头fiber
     if (previousNewFiber === null) {
       resultingFirstChild = newFiber;
     } else {
+      // sibling 接上
       previousNewFiber.sibling = newFiber;
     }
     previousNewFiber = newFiber;
@@ -164,7 +204,11 @@ export function reconcileChildren(
   }
 
   // * 3.(新节点还有)，老节点没了
+  // a null
+  // a b    c
   if (!oldFiber) {
+
+    // 剩余的新增fiber
     for (; newIndex < newChildren.length; newIndex++) {
       const newChild = newChildren[newIndex];
       if (newChild == null) {
@@ -200,10 +244,13 @@ export function reconcileChildren(
     }
   }
 
+  // TODO 最麻烦的情况: diff
   // *4. 新老节点都还有节点，但是因为老fiber是链表，不方便快速get与delete，
   // *   因此把老fiber链表中的节点放入Map中，后续操作这个Map的get与delete
 
+
   const existingChildren = mapRemainingChildren(oldFiber);
+
   for (; newIndex < newChildren.length; newIndex++) {
     const newChild = newChildren[newIndex];
     if (newChild == null) {
@@ -217,9 +264,11 @@ export function reconcileChildren(
       newFiber = createFiberFromElement(newChild, returnFiber);
     }
 
+    // 尝试取，尝试复用
     const matchedFiber = existingChildren.get(newFiber.key || newIndex);
 
     if (matchedFiber) {
+      // 取到了，复用下
       Object.assign(newFiber, {
         stateNode: matchedFiber.stateNode,
         alternate: matchedFiber,
@@ -227,6 +276,7 @@ export function reconcileChildren(
       });
       existingChildren.delete(newFiber.key || newIndex);
     } else {
+      // 没有取到, 新增
       newFiber.flags = Placement;
     }
 

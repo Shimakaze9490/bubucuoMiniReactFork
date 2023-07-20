@@ -7,7 +7,7 @@
   },
   "scripts": {
     "preinstall": "node ./scripts/preinstall.js",
-    "test": "vitest"
+    "test": "vitest --config vite.config.ts"
   },
   "keywords": [],
   "author": "bubucuo",

@@ -6,6 +6,7 @@ import {
   ImmediatePriority,
 } from "../index";
 
+// TODO 补全
 describe("任务", () => {
   it("2个相同优先级的任务", () => {
     let eventTasks: Array<string> = [];

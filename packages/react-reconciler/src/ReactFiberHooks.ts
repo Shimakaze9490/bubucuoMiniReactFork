@@ -83,7 +83,6 @@ function updateWorkInProgressHook(): Hook {
 
 export function useReducer(reducer: Function, initialState: any) {
 
-  // ??
   const hook = updateWorkInProgressHook();
 
   if (!currentlyRenderingFiber.alternate) {
@@ -106,6 +105,7 @@ function dispatchReducerAction(
   reducer: Function,
   action: any
 ) {
+  // 更新 memoizedState , 通过执行reducer
   hook.memoizedState = reducer ? reducer(hook.memoizedState, action) : action;
 
   const root = getRootForUpdatedFiber(fiber);

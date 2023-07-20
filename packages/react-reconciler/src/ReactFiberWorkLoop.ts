@@ -46,7 +46,6 @@ export function updateContainer(element: ReactElement, root: FiberRoot) {
   // 新fiber默认操作 Placement === 新增
   root.current.child.flags = Placement;
 
-  // debugger;
   /* NOTE 开始基于fiber链的更新调度了 */
   // root: 是根fiber实例对象
   // root.current: 是FiberNode头fiber
@@ -72,9 +71,8 @@ function workLoop() {
   global.count_workLoop += 1;
 
   // workLoop仅调用了一次; 但是performUnitOfWork调用了2次, 说明此时的workInProgress有一个child
-  // 关系: wip -> childFiber -> childNull
-  console.log("workInProgress", workInProgress);
-  debugger;
+  // 关系: wip(return: null, sibling: null) -> childFiber -> childNull 和 pendingProps: {children: 'JOKER'}
+  // console.log("workInProgress", workInProgress);
 
   // 第一步: 处理所有fiber的内容:
   // performUnitOfWork --> beginWork(分发) / completeUnitOfWork --> updateHostComponent --> stateNode / wip.child = reconcileChildren;
@@ -193,6 +191,7 @@ function recursivelyTraverseMutationEffects(
 
 // fiber.flags
 // 提交包括操作: 新增插入、移动位置、更新属性、节点删除
+// HACK
 function commitReconciliationEffects(finishedWork: Fiber) {
   const flags = finishedWork.flags;
 
@@ -330,7 +329,7 @@ function commitPlacement(finishedWork: Fiber) {
   // 插入父dom
   if (
     finishedWork.stateNode &&
-    (finishedWork.tag === HostText || finishedWork.tag === HostComponent)
+    (isHost(finishedWork))
   ) {
     // 获取父dom节点
     let parent = parentFiber.stateNode;
@@ -354,6 +353,7 @@ function commitPlacement(finishedWork: Fiber) {
 }
 
 // 返回 fiber 的父dom节点对应的fiber
+// 父fiber，必须有真实节点 stateNode (HostComponent, HostRoot)
 function getHostParentFiber(fiber: Fiber): Fiber {
   let parent = fiber.return;
   while (parent !== null) {
@@ -369,12 +369,14 @@ function isHostParent(fiber: Fiber): boolean {
   return fiber.tag === HostComponent || fiber.tag === HostRoot;
 }
 
-// 返回fiber的下一个兄弟dom节点
+// 返回fiber的下一个兄弟dom节点, 中间fiber 可能没有stateNode
+// 跨层级, 向上查找
 // 不一定
 function getHostSibling(fiber: Fiber) {
   let node = fiber;
 
   sibling: while (1) {
+    // 兄弟节点为空
     while (node.sibling === null) {
       if (node.return === null || isHostParent(node.return)) {
         return null;
@@ -427,6 +429,7 @@ function insertOrAppendPlacementNode(
       parent.appendChild(stateNode);
     }
   } else {
+    // 当前的Fiber 可能是函数组件 --> 不管嵌套多少层(递归) --> 最终isHost
     // 非原生节点的情况: 往下多找一层, node.child
     const child = node.child;
     if (child !== null) {

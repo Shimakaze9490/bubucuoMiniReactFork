@@ -6,6 +6,16 @@ import {
 import { getCurrentTime, isFn, isObject } from "shared/utils";
 import { push, peek, pop } from "./SchedulerMinHeap";
 
+declare global {
+  interface Window {
+    count_scheduleCallback: number;
+  }
+}
+
+// 统计调用次数
+window.count_scheduleCallback = 0;
+
+
 // *** 这是最后具体执行的"任务"内容
 // 如, scheduleUpdateOnFiber里面的workLoop(reconcile) 和 commitRoot里面的flushPassiveEffect
 type Callback = any;
@@ -349,7 +359,9 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number): boolean /* ha
   }
 }
 
-/* @He */
+/* HACK Scheduler 入口 */
+// !! 要从这里看起
+
 // callback 就是待执行的内容函数, 组装成任务
 // 任务考虑优先级, 减少卡顿, 加上优先级
 // 任务分两类: 延迟执行的任务, 立即执行的任务
@@ -360,6 +372,11 @@ export function scheduleCallback(
     delay?: number;
   }
 ) {
+  // 可以发现一次执行流程, scheduleCallback执行了两边
+  // 也就是产生了两个任务来调度:
+  // 协调fiber时 scheduleUpdateOnFiber 和 提交节点时 commitRoot
+  // 这两个任务的优先级都是默认优先级: NormalPriority, 都是及时执行的任务, 没有delay延时
+  window.count_scheduleCallback += 1;
   // 维护, 存储, 池子
   // const taskQueue: Array<Task> = [];
   // const timerQueue: Array<Task> = [];

@@ -8,6 +8,7 @@ import {
   ContextProvider,
   Fragment,
   HostComponent,
+  HostRoot,
   HostText,
 } from "./ReactWorkTags";
 import {
@@ -30,6 +31,16 @@ export function createFiber(
   key: null | string,
   returnFiber: Fiber | null, // returnFiber 代表父级fiber, 每一个fiber诞生都需要知道父fiber
 ): Fiber {
+  if (tag === HostRoot && !returnFiber) {
+    // 根fiber
+    // debugger;
+  } else {
+    // 普通fiber
+
+    // 原生节点 tag === HostComponent === 5
+    // pendingProps: { children: 'JOKER' },
+    // debugger;
+  }
   return new FiberNode(tag, pendingProps, key, returnFiber);
 }
 
@@ -51,7 +62,7 @@ function FiberNode(
   // 不同的组件的  stateNode 定义也不同
   // 原生标签：string
   // 类组件：实例
-  this.stateNode = null;
+  this.stateNode = null; // 初始化fiber时 stateNode都为空
 
   // HACK Fiber 关系
   this.return = returnFiber; //null;
