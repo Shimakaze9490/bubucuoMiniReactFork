@@ -9,7 +9,7 @@ import {HostRoot} from "./ReactWorkTags";
 
 // performUnitOfWork: 执行每个单位的任务: beginWork + completeUnitOfWork
 
-// beginWork: 
+// beginWork:
 
 // complteUnitOfWork: 树的深度优先遍历, Effect链从root节点开始 ??
 

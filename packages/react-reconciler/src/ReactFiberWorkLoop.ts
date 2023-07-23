@@ -313,6 +313,7 @@ function getStateNode(fiber: Fiber) {
 }
 
 // 在dom上，把子节点插入到父节点里
+// commit Placement
 function commitPlacement(finishedWork: Fiber) {
   // 不断向上找returnFiber 父节点
   // let parent = fiber.return;
@@ -326,14 +327,15 @@ function commitPlacement(finishedWork: Fiber) {
   // 找父DOM，部分fiber是没有stateNode的
   const parentFiber = getHostParentFiber(finishedWork);
 
-  // 插入父dom
   if (
+    // 判断当前节点也是 原生节点
     finishedWork.stateNode &&
     (isHost(finishedWork))
   ) {
-    // 获取父dom节点
+    // 获取父真实dom节点
     let parent = parentFiber.stateNode;
 
+    // HACK ??? 没看懂
     // 根节点的dom
     if (parent.containerInfo) {
       parent = parent.containerInfo;
@@ -355,8 +357,11 @@ function commitPlacement(finishedWork: Fiber) {
 // 返回 fiber 的父dom节点对应的fiber
 // 父fiber，必须有真实节点 stateNode (HostComponent, HostRoot)
 function getHostParentFiber(fiber: Fiber): Fiber {
-  let parent = fiber.return;
+
+  let parent = fiber.return; // 向上查找 "fiber树"
+
   while (parent !== null) {
+    // 仅这两中类型的fiber节点: HostComponent 和 HostRoot, 才有真实stateNode
     if (isHostParent(parent)) {
       return parent;
     }

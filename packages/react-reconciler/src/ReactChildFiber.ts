@@ -118,7 +118,7 @@ export function reconcileChildren(
     ? nextChildren
     : [nextChildren];
 
-  let newIndex = 0;
+  let newIndex = 0; // 下标
   let resultingFirstChild = null;
   let previousNewFiber = null;
   let oldFiber = returnFiber.alternate?.child; // 注意这里关系: returnFiber alternate child
@@ -137,12 +137,13 @@ export function reconcileChildren(
   // 遍历检查中...
   for (; oldFiber && newIndex < newChildren.length; newIndex++) {
 
+    // 每一项子节点Element --> 需要创建转换为childFiber, 并链成单链表
     const newChild = newChildren[newIndex];
 
     // 1。 placeChild 这个函数
     // 2。 oldFiber 和 nextOldFiber 关系和作用 !!!
 
-    // 排除null
+    // 排除null, 特殊情况
     if (newChild == null) {
       continue;
     }
