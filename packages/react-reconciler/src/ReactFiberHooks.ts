@@ -1,24 +1,24 @@
-import {isFn} from "shared/utils";
+import { isFn } from "shared/utils";
 import {
   Flags,
   Passive as PassiveEffect,
   Update as UpdateEffect,
 } from "./ReactFiberFlags";
-import {scheduleUpdateOnFiber} from "./ReactFiberWorkLoop";
+import { scheduleUpdateOnFiber } from "./ReactFiberWorkLoop";
 import {
   HookFlags,
   HookHasEffect,
   HookLayout,
   HookPassive,
 } from "./ReactHookEffectTags";
-import {Fiber, FiberRoot} from "./ReactInternalTypes";
-import {HostRoot} from "./ReactWorkTags";
-import {ReactContext} from "../../shared/ReactTypes";
-import {readContext} from "./ReactNewContext";
+import { Fiber, FiberRoot } from "./ReactInternalTypes";
+import { HostRoot } from "./ReactWorkTags";
+import { ReactContext } from "../../shared/ReactTypes";
+import { readContext } from "./ReactNewContext";
 
 // 一个单位的hook数据结构
 type Hook = {
-  memoizedState: any;
+  memoizedState: any; // HACK 特别注意, fiber上也有个memoizedState, 注意区分!
   next: Hook | null;
 };
 
@@ -54,7 +54,9 @@ function updateWorkInProgressHook(): Hook {
   const current = currentlyRenderingFiber.alternate;
 
   if (current) {
+    // 首先 复用整个 hooks 链表, 再一个个更新值
     currentlyRenderingFiber.memoizedState = current.memoizedState;
+
     if (workInProgressHook) {
       workInProgressHook = hook = workInProgressHook.next;
       currentHook = currentHook.next;
@@ -82,13 +84,13 @@ function updateWorkInProgressHook(): Hook {
 }
 
 export function useReducer(reducer: Function, initialState: any) {
-
   const hook = updateWorkInProgressHook();
 
   if (!currentlyRenderingFiber.alternate) {
     // 函数组件初次渲染
     hook.memoizedState = initialState;
   }
+
   const dispatch = dispatchReducerAction.bind(
     null,
     currentlyRenderingFiber,
@@ -108,10 +110,9 @@ function dispatchReducerAction(
   // 更新 memoizedState , 通过执行reducer
   hook.memoizedState = reducer ? reducer(hook.memoizedState, action) : action;
 
+  // TODO
   const root = getRootForUpdatedFiber(fiber);
-
-  fiber.alternate = {...fiber};
-
+  fiber.alternate = { ...fiber };
   scheduleUpdateOnFiber(root, fiber);
 }
 
@@ -134,6 +135,7 @@ export function useState(initialState: any) {
   return useReducer(null, isFn(initialState) ? initialState() : initialState);
 }
 
+// 流程完全一样, 标记不同
 export function useEffect(
   create: () => (() => void) | void,
   deps: Array<unknown> | void | null
@@ -149,8 +151,8 @@ export function useLayoutEffect(
 }
 
 function updateEffectImpl(
-  fiberFlags: Flags,
-  hookFlags: HookFlags,
+  fiberFlags: Flags, // fiber.flags 代表具体操作
+  hookFlags: HookFlags, // 标记 effect 的执行阶段
   create: () => (() => void) | void,
   deps: Array<unknown> | void | null
 ) {
@@ -158,19 +160,26 @@ function updateEffectImpl(
 
   const nextDeps = deps === undefined ? null : deps;
 
+  // current = fiber.alternate; 备份
+  // currentHook <-- current.memorizedState;
+
+  // TODO 是否为更新
   if (currentHook) {
     // 检查deps的变化
-    const prevEffect = currentHook.memoizedState;
+    const prevEffect = currentHook.memoizedState; // 上一次的hook
 
     if (deps) {
-      const prevDeps = prevEffect.deps;
-      if (areHookInputsEqual(deps, prevDeps)) {
-        return;
+      const prevDeps = prevEffect.deps; // 上一次的依赖
+      if (areHookInputsEqual(deps /* 新 */, prevDeps /* 旧 */)) {
+        return; // HACK 阻止了执行
       }
     }
   }
 
+  // 默认是执行本次create函数的
+
   currentlyRenderingFiber.flags |= fiberFlags;
+  // HookHasEffect
   hook.memoizedState = pushEffect(HookHasEffect | hookFlags, create, nextDeps);
 }
 
@@ -179,6 +188,7 @@ function pushEffect(
   create: () => (() => void) | void,
   deps: Array<unknown> | void | null
 ) {
+  // 新effect
   const effect: Effect = {
     tag,
     create,
@@ -186,21 +196,27 @@ function pushEffect(
     next: null,
   };
 
-  // 单向循环链表
+  // 单向循环链表 fiber.updateQueue
   let componentUpdateQueue = currentlyRenderingFiber.updateQueue;
 
   if (componentUpdateQueue === null) {
     // 第一个effect
-    componentUpdateQueue = {lastEffect: null};
+    componentUpdateQueue = { lastEffect: null };
     currentlyRenderingFiber.updateQueue = componentUpdateQueue;
+
+    // HACK *** 循环
+    // 1. effect.next --> effect 自己指向自己 一个节点形成环 A -> B -> C -> A
+    // 2. componentUpdateQueue.lastEffect = effect.next 连接上入口 lastEffect -> A
     componentUpdateQueue.lastEffect = effect.next = effect;
   } else {
+    // HACK 形成环后的插入一个节点
+    // lastEffect --> effect --> firstEffect
     // 在原先的 effect 后面累加
     const lastEffect = componentUpdateQueue.lastEffect;
     const firstEffect = lastEffect.next;
-    lastEffect.next = effect;
     effect.next = firstEffect;
-    componentUpdateQueue.lastEffect = effect;
+    lastEffect.next = effect;
+    componentUpdateQueue.lastEffect = effect; // 收尾连上, lastEffect 永远指向最后最新一个; effect 是尾
   }
 
   return effect;
@@ -210,11 +226,14 @@ export function areHookInputsEqual(
   nextDeps: Array<unknown>,
   prevDeps: Array<unknown> | null
 ): boolean {
+  // 没有依赖项每次都更新
+  // 空数组不更新
   if (prevDeps === null) {
     return false;
   }
 
   for (let i = 0; i < prevDeps.length && i < nextDeps.length; i++) {
+    // === == 都不太相等
     if (Object.is(nextDeps[i], prevDeps[i])) {
       continue;
     }
@@ -223,6 +242,8 @@ export function areHookInputsEqual(
   return true;
 }
 
+// 不涉及到要去刷新组件, useMemo是被刷新的一方
+// 人数: 100, 人数: 200
 export function useMemo<T>(
   nextCreate: () => T,
   deps: Array<unknown> | void | null
@@ -230,30 +251,45 @@ export function useMemo<T>(
   const hook = updateWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
 
+  // 之前存下的值 [nextValue, nextDeps];
   const prevState = hook.memoizedState;
+
+  // 更新阶段
   if (prevState !== null) {
     if (nextDeps !== null) {
       const prevDeps = prevState[1];
+      // Object.is
       if (areHookInputsEqual(nextDeps as any, prevDeps)) {
         return prevState[0];
       }
     }
   }
 
-  const nextValue = nextCreate();
+  // 必须执行一遍昂贵的操作
+  const nextValue = nextCreate(); // Promise<{ pending... }>
 
   hook.memoizedState = [nextValue, nextDeps];
-  return nextValue;
+  return hook.memoizedState[0];
 }
 
+// useMemo 模拟 useCallback
+// useMemo 多包一层函数 () => () => {}
+
+// 复组件传了个callback函数给子组件
+// 子组件即使用了pureComponent也无法阻止被迫更新, (prev, next) => boolean;
+// callback1 !== callback2 函数地址永远不相等
+// 场景2 作为其他hook的依赖
 export function useCallback<T>(
   callback: T,
   deps: Array<unknown> | void | null
 ): T {
   const hook = updateWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
+
+  // [callback, nextDeps]
   const prevState = hook.memoizedState;
 
+  // 更新
   if (prevState !== null) {
     if (nextDeps !== null) {
       const prevDeps = prevState[1];
@@ -264,14 +300,17 @@ export function useCallback<T>(
   }
 
   hook.memoizedState = [callback, nextDeps];
-  return callback;
+  return hook.memoizedState[0];
 }
 
-export function useRef<T>(initialValue: T): {current: T} {
+// 也没有刷新页面, 也不在组件刷新的流程中
+// useRef的更新, 最单纯的 ref.current = newVal; 也不触发组件更新
+export function useRef<T>(initialValue: T): { current: T } {
   const hook = updateWorkInProgressHook();
 
+  // 初始化
   if (!currentHook) {
-    const ref = {current: initialValue};
+    const ref = { current: initialValue }; // 构造一个对象
     hook.memoizedState = ref;
   }
 

@@ -195,7 +195,7 @@ function recursivelyTraverseMutationEffects(
 function commitReconciliationEffects(finishedWork: Fiber) {
   const flags = finishedWork.flags;
 
-  // 位运算比较
+  // 位运算比较: DOM
   if (flags & Placement) {
     // commitPlacement 在dom上，把子节点插到父节点
     commitPlacement(finishedWork);
@@ -204,6 +204,7 @@ function commitReconciliationEffects(finishedWork: Fiber) {
   }
 
   // HACK 分发提交, 如果是原生标签如何提交;
+  // 函数组件的hooks更新也是 Update
   if (flags & Update) {
     switch (finishedWork.tag) {
       case HostComponent:
@@ -245,27 +246,38 @@ function commitReconciliationEffects(finishedWork: Fiber) {
   }
 }
 
+// HACK 真正hook运行
 function commitHookEffects(finishedWork: Fiber, hookFlags: HookFlags) {
+
+  // 单向循环链表
   const updateQueue = finishedWork.updateQueue;
 
+  // 整个链仅暴露出来了 lastEffect
   const lastEffect = updateQueue != null ? updateQueue.lastEffect : null;
+
   if (lastEffect) {
+    // A --> B --> C --> D
+    // lastEffect就是D / next指回A
     const firstEffect = lastEffect.next;
     let effect = firstEffect;
 
     do {
+      // 当前effect 是同步执行吗
       if ((effect.tag & hookFlags) === hookFlags) {
         const create = effect.create;
-        effect.destory = create();
+        // Scheduler.scheduleCallback 下一轮宏任务, 所以说有延迟
+        effect.destory = create(); // 正式执行, 返回值是destory
       }
       effect = effect.next;
-    } while (effect !== firstEffect);
+    } while (effect !== firstEffect); // 头尾相遇表示结束
   }
 }
 
 // passive adj.被动的
 function flushPassiveEffect(finishedWork: Fiber) {
+  // child
   recursivelyTraversePassiveMountEffects(finishedWork);
+  // 本身
   commitPassiveMountOnFiber(finishedWork);
 }
 
@@ -273,6 +285,7 @@ function recursivelyTraversePassiveMountEffects(parentFiber: Fiber) {
   let child = parentFiber.child;
 
   while (child !== null) {
+    // HACK flushPassiveEffect(child); 递归
     commitPassiveMountOnFiber(child);
     child = child.sibling;
   }
@@ -281,7 +294,7 @@ function recursivelyTraversePassiveMountEffects(parentFiber: Fiber) {
 function commitPassiveMountOnFiber(finishedWork: Fiber) {
   switch (finishedWork.tag) {
     case FunctionComponent:
-      if (finishedWork.flags & Passive) {
+      if (finishedWork.flags & Passive) { // Passive 消极的，异步的
         commitHookEffects(finishedWork, HookPassive);
       }
       finishedWork.flags &= ~Passive;
@@ -337,7 +350,7 @@ function commitPlacement(finishedWork: Fiber) {
 
     // HACK ??? 没看懂
     // 根节点的dom
-    if (parent.containerInfo) {
+    if (parent.containerInfo /* RootFiber */) {
       parent = parent.containerInfo;
     }
 

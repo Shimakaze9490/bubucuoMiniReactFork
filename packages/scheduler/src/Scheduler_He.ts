@@ -15,7 +15,6 @@ declare global {
 // 统计调用次数
 window.count_scheduleCallback = 0;
 
-
 // *** 这是最后具体执行的"任务"内容
 // 如, scheduleUpdateOnFiber里面的workLoop(reconcile) 和 commitRoot里面的flushPassiveEffect
 type Callback = any;
@@ -70,7 +69,7 @@ let nddesPaint = false;
 
 let frameInterval = 5; // frameYieldMs;
 
-export function cancelCallback (task: Task) {
+export function cancelCallback(task: Task) {
   // 由于堆里面不能直接删除, 把回调置为空就能防止被执行
   task.callback = null;
 }
@@ -167,15 +166,14 @@ const channel = new MessageChannel();
 
 schedulePerformWorkUntilDeadline = () => {
   // 一端发送消息
-  channel.port1.postMessage(null)
-}
+  channel.port1.postMessage(null);
+};
 
 // 一端接收消息
-channel.port2.onmessage = performWorkUnitDeadline
+channel.port2.onmessage = performWorkUnitDeadline;
 
-// 宏任务内执行函数链: performWorkUnitDeadline --> 
-function performWorkUnitDeadline () {
-
+// 宏任务内执行函数链: performWorkUnitDeadline -->
+function performWorkUnitDeadline() {
   // 要去执行内容函数flushWork, 实际存在全局变量 scheduledHostCallback
   if (scheduledHostCallback !== null) {
     const currentTime = getCurrentTime();
@@ -192,7 +190,6 @@ function performWorkUnitDeadline () {
       hasMoreWork = scheduledHostCallback(hasTimeRemaining, currentTime); // 就是执行flushWork
     } finally {
       if (hasMoreWork) {
-
       } else {
         // 没有更多需要执行的任务: 这轮事件循环宏任务, 结束
         isMessageLoopRunning = false;
@@ -217,7 +214,6 @@ function performWorkUnitDeadline () {
 // HACK 理解 事件循环 / 宏任务
 // 为什么react要自己实现 ?? 更高的控制权 / 兼容性
 function requestHostCallback(_flushWork: Callback) {
-
   // 保持api参数的一致性
   // 调用flushWork, 需要传入 hasTimeRemaining, initialTime 出处是??
 
@@ -236,11 +232,13 @@ function requestHostCallback(_flushWork: Callback) {
     // postMessage()
     schedulePerformWorkUntilDeadline();
   }
-
 }
 /* 调用链 scheduleCallback -> requestHostCallback -> '宏任务: MessageChannel' ->  flushWork -> workLoop ->  */
 /* 消耗1单位的时间切片 */
-function flushWork(hasTimeRemaining: boolean, initialTime: number): boolean /* hasMoreWork */ {
+function flushWork(
+  hasTimeRemaining: boolean,
+  initialTime: number
+): boolean /* hasMoreWork */ {
   isHostCallbackScheduled = false; // 开锁
 
   // 额外检查, 如果有在倒计时没必要, 先取消掉
@@ -284,7 +282,10 @@ function shouldYieldToHost(): boolean {
 
 // hasTimeRemaining = true
 // initialTime = startTime = 时间切片开始时刻
-function workLoop(hasTimeRemaining: boolean, initialTime: number): boolean /* hasMoreWork */ {
+function workLoop(
+  hasTimeRemaining: boolean,
+  initialTime: number
+): boolean /* hasMoreWork */ {
   // currentTask 当前任务: 为什么设置成全局变量? 方便取消打断 currentTask = null;
   // 所有需要执行的任务都放到了taskQueue里面了, 所以接下来就是遍历其
 
@@ -301,7 +302,10 @@ function workLoop(hasTimeRemaining: boolean, initialTime: number): boolean /* ha
     // 2. 检查是否该交还控制权: 也就是时间切片耗尽
     // 3. hasTimeRemaining, 固定为true, 因为是内部自行判断剩余时间的
     // should 与 hasTimeRemaining 满足一个就行, 因为是相同含义
-    if (currentTask.expirationTime > currentTime && (should || !hasTimeRemaining)) {
+    if (
+      currentTask.expirationTime > currentTime &&
+      (should || !hasTimeRemaining)
+    ) {
       break;
     }
 

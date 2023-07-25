@@ -104,8 +104,8 @@ function updateFunctionComponent(current: Fiber | null, workInProgress: Fiber) {
   /* Hooks 是函数组件特有的 */
   // HACK hooks渲染的入口在这 renderHooks(fnFiber) (来源 ReactFiberHooks.ts)
   renderHooks(workInProgress);
-
   prepareToReadContext(workInProgress);
+
   const {type, pendingProps} = workInProgress;
 
   // type是函数本身, 执行后返回children, 也就是return的jsx
@@ -120,6 +120,8 @@ function updateFunctionComponent(current: Fiber | null, workInProgress: Fiber) {
 function updateClassComponent(current: Fiber | null, workInProgress: Fiber) {
   const {type, pendingProps} = workInProgress;
 
+  // 类组件fiber.type 是构造函数
+  // static contextType 构造函数来获取的
   const context = type.contextType;
 
   prepareToReadContext(workInProgress);
@@ -127,6 +129,8 @@ function updateClassComponent(current: Fiber | null, workInProgress: Fiber) {
   const newValue = readContext(context);
 
   const instance = new type(pendingProps);
+
+  // 把值挂到实例上(为什么只能订阅单一的来源)
   instance.context = newValue;
   workInProgress.stateNode = instance;
 
@@ -159,8 +163,13 @@ function updateFragment(current: Fiber | null, workInProgress: Fiber) {
 }
 
 function updateContextProvider(current: Fiber | null, workInProgress: Fiber) {
+
+  // HACK Element 会将Context编译
   const context = workInProgress.type._context;
-  const newValue = workInProgress.pendingProps.value;
+
+  // <CountContext.Provider value={999}>
+  // jsx -> element -> fiber
+  const newValue = workInProgress.pendingProps.value; // 999
 
   pushProvider(context, newValue);
 
@@ -174,15 +183,18 @@ function updateContextProvider(current: Fiber | null, workInProgress: Fiber) {
   return workInProgress.child;
 }
 
+// type -> fiberTag ->
 function updateContextConsumer(current: Fiber | null, workInProgress: Fiber) {
   prepareToReadContext(workInProgress);
 
   const context = workInProgress.type;
   const newValue = readContext(context);
 
+  // <CountContext.Consumer>{(ctx) => <h1>{ctx}</h1>}</CountContext.Consumer>
+  // jsx -> element -> pendingProps.children
   const render = workInProgress.pendingProps.children;
 
-  const newChildren = render(newValue);
+  const newChildren = render(newValue /* ctx */);
 
   workInProgress.child = reconcileChildren(
     current,

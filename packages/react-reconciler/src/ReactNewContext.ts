@@ -7,6 +7,7 @@ const valueCursor: StackCursor<unknown> = createCursor(null);
 let currentlyRenderingFiber: Fiber = null;
 let lastContextDependency = null;
 
+// 这是 准备读取使用 context 入口, 类比与 renderHooks
 export function prepareToReadContext(workInProgress: Fiber): void {
   currentlyRenderingFiber = workInProgress;
   lastContextDependency = null;

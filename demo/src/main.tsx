@@ -32,8 +32,8 @@ function FunctionComponent(props: {name: string}) {
       <p>{props.name}</p>
       <button onClick={() => setCount()}>{count}</button>
 
-      <CountContext.Provider value={999}>
-        <CountContext.Provider value={count}>
+      <CountContext.Provider value={{ name: '' }}>
+        <CountContext.Provider value={{ name: count }}>
           <Child tips="one" />
           <ClassComponent name="类组件" />
         </CountContext.Provider>
